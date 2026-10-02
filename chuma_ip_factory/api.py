@@ -1,5 +1,5 @@
 from http.server import BaseHTTPRequestHandler,HTTPServer
-import json, os, hmac
+import json, os, hmac, threading, time
 from .core import CHUMA, VERSION
 
 class API(BaseHTTPRequestHandler):
@@ -36,6 +36,9 @@ class API(BaseHTTPRequestHandler):
         if self.path=='/provider': return self.sendj(200,self.factory.provider_status())
         if self.path.startswith('/status/'):
             return self.sendj(200,self.factory.status(self.path.split('/')[-1]))
+        if self.path.startswith('/jobs/'):
+            job=self.factory.get_job(self.path.split('/')[-1])
+            return self.sendj(200,job) if job else self.sendj(404,{'error':'job_not_found'})
         self.sendj(404,{'error':'not_found'})
     def do_POST(self):
         if not self.require_auth(): return
@@ -49,8 +52,29 @@ class API(BaseHTTPRequestHandler):
             if p=='/characters':
                 cid=f.create_character(data['owner_id'],data['name'],data.get('card')); return self.sendj(201,{'character_id':cid})
             if p=='/cycle': return self.sendj(200,f.autonomous_cycle(data['owner_id'],data['character_id'],data.get('platform','local-test')))
+            if p=='/jobs':
+                payload={'character_id':data['character_id'],'platform':data.get('platform','local-test'),'max_attempts':data.get('max_attempts',3)}
+                jid=f.enqueue_job(data['owner_id'],'AUTONOMOUS_CYCLE',payload,data.get('idempotency_key'))
+                return self.sendj(202,{'job_id':jid,'status':'QUEUED'})
             self.sendj(404,{'error':'not_found'})
         except Exception as e: self.sendj(400,{'error':type(e).__name__,'message':str(e)})
 
+def worker_loop(factory,stop_event):
+    while not stop_event.is_set():
+        try:
+            job=factory.claim_job()
+            if job:
+                factory.run_job(job['job_id'])
+                continue
+        except Exception:
+            time.sleep(1)
+        stop_event.wait(1)
+
 def run(host='127.0.0.1',port=8097,db='runtime/chuma.db',asset_root='runtime/media',image_provider=None):
-    f=CHUMA(db,asset_root=asset_root,image_provider=image_provider); API.factory=f; HTTPServer((host,port),API).serve_forever()
+    f=CHUMA(db,asset_root=asset_root,image_provider=image_provider); API.factory=f
+    stop_event=threading.Event()
+    threading.Thread(target=worker_loop,args=(f,stop_event),daemon=True,name='chuma-worker').start()
+    try:
+        HTTPServer((host,port),API).serve_forever()
+    finally:
+        stop_event.set(); f.store.close()
