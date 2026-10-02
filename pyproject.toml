@@ -3,9 +3,9 @@ requires=['setuptools>=68']
 build-backend='setuptools.build_meta'
 [project]
 name='chuma-ip-factory'
-version='2.5.4'
+version='2.5.5'
 description='CHUMA IP FACTORY image-first autonomous character growth core'
 requires-python='>=3.11'
-dependencies=[]
+dependencies=['huggingface_hub>=0.35.0']
 [tool.pytest.ini_options]
 pythonpath=['.']
