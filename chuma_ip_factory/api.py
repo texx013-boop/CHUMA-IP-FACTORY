@@ -31,6 +31,12 @@ class API(BaseHTTPRequestHandler):
         if self.path in ('/','/ui'):
             return self.send_html()
         if self.path=='/health': return self.sendj(200,{'status':'ok','version':VERSION})
+        if self.path=='/ready':
+            try:
+                self.factory.store.one('SELECT 1')
+                return self.sendj(200,{'status':'ready','version':VERSION})
+            except Exception as exc:
+                return self.sendj(503,{'status':'not_ready','error':type(exc).__name__})
         if self.path=='/config': return self.sendj(200,{'auth_required':bool(self.admin_token),'version':VERSION})
         if not self.require_auth(): return
         if self.path=='/provider': return self.sendj(200,self.factory.provider_status())
