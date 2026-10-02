@@ -231,7 +231,15 @@ class CHUMA:
             aid=prod['asset_ids'][0]; src=self.store.one("SELECT * FROM artifacts WHERE asset_id=? AND owner_id=? ORDER BY created_at LIMIT 1",(aid,owner))
             if not src: continue
             srcpath=Path(src['storage_path']); dest=self.asset_root/f"{content_id}_{variant.replace(':','x')}{srcpath.suffix}"
-            dest.write_bytes(srcpath.read_bytes()); ah=hashlib.sha256(dest.read_bytes()).hexdigest(); arid=uid('ART')
+            raw=srcpath.read_bytes()
+            if src['mime_type']=='image/svg+xml':
+                # Preserve a true visual master and expose deterministic derived SVGs.
+                sizes={'1:1':(1024,1024),'4:5':(1024,1280),'9:16':(1024,1820)}
+                w,h=sizes.get(variant,(1024,1280))
+                text=f'<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{h}" viewBox="0 0 {w} {h}"><rect width="100%" height="100%" fill="#111"/><image href="data:image/svg+xml;base64,{base64.b64encode(raw).decode()}" width="{w}" height="{h}" preserveAspectRatio="xMidYMid meet"/></svg>'
+                raw=text.encode()
+                dest=dest.with_suffix('.svg')
+            dest.write_bytes(raw); ah=hashlib.sha256(raw).hexdigest(); arid=uid('ART')
             self.store.db.execute('INSERT INTO artifacts VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',(arid,owner,row['character_id'],content_id,aid,variant,src['mime_type'],str(dest),ah,src['provider'],'READY',now())); artifacts.append(arid)
         self.store.commit(); self.store.event(owner,'IMAGE_VARIANTS_CREATED','CONTENT',content_id,{'count':len(artifacts)}); return artifacts
     def qc(self,owner,content_id):
