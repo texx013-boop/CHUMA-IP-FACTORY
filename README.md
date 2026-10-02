@@ -7,7 +7,7 @@ Private repository for the CHUMA IP FACTORY / CHUMA OS implementation.
 - Architecture: Master Architecture 2.0
 - Image-first production strategy
 - Owner is not the daily operator
-- Current verified image-factory milestone: 2.5.2
+- Current verified image-factory milestone: 2.5.3
 - External provider integrations remain explicitly disconnected until authorized
 - Cloud runtime: Railway
 - Current production smoke test: public HTTP UI online
