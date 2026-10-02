@@ -12,6 +12,14 @@ class Handler(BaseHTTPRequestHandler):
         raw=json.dumps(payload).encode(); self.send_response(200); self.send_header('Content-Type','application/json'); self.send_header('Content-Length',str(len(raw))); self.end_headers(); self.wfile.write(raw)
     def log_message(self,*args): pass
 
+class FlakyHandler(Handler):
+    attempts=0
+    def do_POST(self):
+        FlakyHandler.attempts += 1
+        if FlakyHandler.attempts < 3:
+            self.send_response(503); self.end_headers(); return
+        super().do_POST()
+
 def test_http_provider_real_binary_end_to_end():
     server=HTTPServer(('127.0.0.1',0),Handler); threading.Thread(target=server.serve_forever,daemon=True).start()
     try:
@@ -24,5 +32,16 @@ def test_http_provider_real_binary_end_to_end():
         assert c.provider_status()['connected'] is True
         assert c.store.one("SELECT status FROM provider_runs ORDER BY created_at DESC LIMIT 1")['status']=='SUCCEEDED'
         c.store.close(); d.cleanup()
+    finally:
+        server.shutdown(); server.server_close()
+
+def test_http_provider_retries_transient_5xx():
+    FlakyHandler.attempts=0
+    server=HTTPServer(('127.0.0.1',0),FlakyHandler); threading.Thread(target=server.serve_forever,daemon=True).start()
+    try:
+        provider=HTTPImageProvider(f'http://127.0.0.1:{server.server_port}/generate','test-key',max_attempts=3,timeout=5,retry_delay=0)
+        result=provider.generate({'brief':{'hook':'retry'}})
+        assert result['mime_type']=='image/png'
+        assert FlakyHandler.attempts==3
     finally:
         server.shutdown(); server.server_close()
