@@ -11,7 +11,7 @@ from dataclasses import dataclass, asdict
 from pathlib import Path
 from typing import Any, Optional
 
-VERSION='2.5.0'
+VERSION='2.5.1'
 SCHEMA_VERSION=9
 
 class CHUMAError(Exception): pass
@@ -165,9 +165,22 @@ class CHUMA:
         return {'character_id':cid,'assets_created':max(0,4-existing_assets),'experiments_created':max(0,3-existing_experiments),'state':current}
     def _generate_asset(self,owner,cid,kind,meta,brief=None,content_id=None):
         req={'character_id':cid,'kind':kind,'meta':meta,'brief':brief or {}}
-        result=self.image_provider.generate(req)
+        run_id=uid('RUN')
+        try:
+            result=self.image_provider.generate(req)
+        except Exception as exc:
+            self.store.db.execute('INSERT INTO provider_runs VALUES(?,?,?,?,?,?,?,?)',
+                (run_id,owner,getattr(self.image_provider,'name','unknown'),'IMAGE_GENERATE',
+                 json.dumps(req,ensure_ascii=False),
+                 json.dumps({'error_type':type(exc).__name__,'error':str(exc)},ensure_ascii=False),
+                 'FAILED',now()))
+            self.store.commit()
+            self.store.event(owner,'IMAGE_GENERATION_FAILED','CHARACTER',cid,
+                             {'kind':kind,'content_id':content_id,'provider':getattr(self.image_provider,'name','unknown'),
+                              'error_type':type(exc).__name__})
+            raise
         self.store.db.execute('INSERT INTO assets VALUES(?,?,?,?,?,?,?,?)',(result['asset_id'],owner,cid,kind,result['status'],json.dumps(result['meta'],ensure_ascii=False),result['content_hash'],now()))
-        self.store.db.execute('INSERT INTO provider_runs VALUES(?,?,?,?,?,?,?,?)',(uid('RUN'),owner,getattr(self.image_provider,'name','unknown'),'IMAGE_GENERATE',json.dumps(req,ensure_ascii=False),json.dumps({'content_hash':result['content_hash'],'mime_type':result.get('mime_type')},ensure_ascii=False),'SUCCEEDED',now()))
+        self.store.db.execute('INSERT INTO provider_runs VALUES(?,?,?,?,?,?,?,?)',(run_id,owner,getattr(self.image_provider,'name','unknown'),'IMAGE_GENERATE',json.dumps(req,ensure_ascii=False),json.dumps({'content_hash':result['content_hash'],'mime_type':result.get('mime_type')},ensure_ascii=False),'SUCCEEDED',now()))
         if result.get('bytes') is not None:
             ext='svg' if result.get('mime_type')=='image/svg+xml' else 'bin'
             path=self.asset_root/f"{result['asset_id']}.{ext}"; path.write_bytes(result['bytes'])
