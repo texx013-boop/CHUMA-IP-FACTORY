@@ -22,3 +22,5 @@ jobs:
         run: python -m compileall -q chuma_ip_factory run.py
       - name: Test
         run: python -m pytest -q
+      - name: Docker build
+        run: docker build -t chuma-ip-factory:ci .
