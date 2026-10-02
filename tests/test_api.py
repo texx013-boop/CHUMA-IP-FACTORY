@@ -71,6 +71,12 @@ def test_http_health_and_auth_contract():
         with urllib.request.urlopen(urllib.request.Request(base + "/jobs/"+job_id, headers={"Authorization":"Bearer test-admin-token"}), timeout=5) as r:
             assert json.loads(r.read().decode())["status"] == "QUEUED"
 
+        try:
+            urllib.request.urlopen(base + "/artifacts/not-real", timeout=5)
+            assert False, "artifact route accepted request without token"
+        except urllib.error.HTTPError as e:
+            assert e.code == 401
+
         oversized = urllib.request.Request(
             base + "/owners",
             data=b"x" * (API.MAX_BODY_BYTES + 1),
