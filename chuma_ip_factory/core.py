@@ -289,8 +289,10 @@ class CHUMA:
         else:
             row=self.store.one("SELECT * FROM jobs WHERE status='QUEUED' AND next_run_at<=? ORDER BY created_at LIMIT 1",(now(),))
         if not row: return None
-        self.store.db.execute("UPDATE jobs SET status='RUNNING',attempts=attempts+1,updated_at=? WHERE job_id=? AND status='QUEUED'",(now(),row['job_id']))
+        cur=self.store.db.execute("UPDATE jobs SET status='RUNNING',attempts=attempts+1,updated_at=? WHERE job_id=? AND status='QUEUED'",(now(),row['job_id']))
         self.store.commit()
+        if getattr(cur,'rowcount',1) != 1:
+            return None
         return self.store.one('SELECT * FROM jobs WHERE job_id=?',(row['job_id'],))
     def get_job(self,job_id):
         row=self.store.one('SELECT * FROM jobs WHERE job_id=?',(job_id,))
