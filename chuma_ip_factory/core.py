@@ -1,5 +1,5 @@
 from __future__ import annotations
-import hashlib, json, os, sqlite3, time, uuid, base64, urllib.request
+import hashlib, json, os, sqlite3, time, uuid, base64, urllib.request, urllib.error
 
 try:
     import psycopg
