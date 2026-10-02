@@ -40,6 +40,7 @@ class API(BaseHTTPRequestHandler):
                 return self.sendj(503,{'status':'not_ready','error':type(exc).__name__})
         if self.path=='/config': return self.sendj(200,{'auth_required':bool(self.admin_token),'version':VERSION})
         if self.path.startswith('/artifacts/'):
+            if not self.require_auth(): return
             aid=self.path.split('/')[-1]
             row=self.factory.store.one('SELECT storage_path,mime_type FROM artifacts WHERE artifact_id=?',(aid,))
             if not row: return self.sendj(404,{'error':'artifact_not_found'})
