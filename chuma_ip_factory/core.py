@@ -325,4 +325,6 @@ class CHUMA:
         out['jobs_detail']=[self.get_job(r['job_id']) for r in self.store.q('SELECT job_id FROM jobs WHERE owner_id=? ORDER BY created_at DESC LIMIT 20',(owner,))]
         chars=self.store.q('SELECT character_id,name,state,version FROM characters WHERE owner_id=? ORDER BY created_at',(owner,))
         out['characters_detail']=[dict(c) for c in chars]
+        arts=self.store.q('SELECT artifact_id,character_id,content_id,variant,mime_type,provider,status,created_at FROM artifacts WHERE owner_id=? ORDER BY created_at DESC LIMIT 100',(owner,))
+        out['artifacts_detail']=[dict(a) for a in arts]
         return out
