@@ -25,7 +25,7 @@ def test_http_health_and_auth_contract():
             assert r.status == 200
             payload = json.loads(r.read().decode())
             assert payload["status"] == "ok"
-            assert payload["version"] == "2.5.1"
+            assert payload["version"] == "2.5.2"
 
         try:
             urllib.request.urlopen(base + "/provider", timeout=5)
