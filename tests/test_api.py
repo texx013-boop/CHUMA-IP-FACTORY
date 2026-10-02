@@ -43,6 +43,34 @@ def test_http_health_and_auth_contract():
             assert payload["name"] == "test-local-image"
             assert payload["connected"] is True
 
+        owner_req = urllib.request.Request(
+            base + "/owners",
+            data=b"{}",
+            method="POST",
+            headers={"Authorization": "Bearer test-admin-token", "Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(owner_req, timeout=5) as r:
+            owner_id=json.loads(r.read().decode())["owner_id"]
+        char_req = urllib.request.Request(
+            base + "/characters",
+            data=json.dumps({"owner_id":owner_id,"name":"Queue API"}).encode(),
+            method="POST",
+            headers={"Authorization": "Bearer test-admin-token", "Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(char_req, timeout=5) as r:
+            character_id=json.loads(r.read().decode())["character_id"]
+        job_req = urllib.request.Request(
+            base + "/jobs",
+            data=json.dumps({"owner_id":owner_id,"character_id":character_id,"idempotency_key":"api-job-1"}).encode(),
+            method="POST",
+            headers={"Authorization": "Bearer test-admin-token", "Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(job_req, timeout=5) as r:
+            assert r.status == 202
+            job_id=json.loads(r.read().decode())["job_id"]
+        with urllib.request.urlopen(urllib.request.Request(base + "/jobs/"+job_id, headers={"Authorization":"Bearer test-admin-token"}), timeout=5) as r:
+            assert json.loads(r.read().decode())["status"] == "QUEUED"
+
         oversized = urllib.request.Request(
             base + "/owners",
             data=b"x" * (API.MAX_BODY_BYTES + 1),
