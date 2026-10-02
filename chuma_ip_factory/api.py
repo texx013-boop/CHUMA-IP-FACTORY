@@ -3,6 +3,7 @@ import json, os, hmac
 from .core import CHUMA, VERSION
 
 class API(BaseHTTPRequestHandler):
+    MAX_BODY_BYTES=1024*1024
     factory=None
     admin_token=os.getenv("CHUMA_ADMIN_TOKEN", "").strip()
 
@@ -39,7 +40,10 @@ class API(BaseHTTPRequestHandler):
     def do_POST(self):
         if not self.require_auth(): return
         try:
-            n=int(self.headers.get('Content-Length','0')); data=json.loads(self.rfile.read(n) or '{}')
+            n=int(self.headers.get('Content-Length','0'))
+            if n<0 or n>self.MAX_BODY_BYTES:
+                return self.sendj(413,{'error':'payload_too_large','message':'request body exceeds 1 MiB'})
+            data=json.loads(self.rfile.read(n) or '{}')
             p=self.path; f=self.factory
             if p=='/owners': return self.sendj(201,{'owner_id':f.owner()})
             if p=='/characters':
