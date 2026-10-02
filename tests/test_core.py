@@ -64,3 +64,22 @@ def test_variants_are_idempotent():
     d,c=app(); o=c.owner(); cid=c.create_character(o,'Variants'); c.initialize_character(o,cid); cnt=c.create_content(o,cid); c.qc(o,cnt)
     a=c.produce_variants(o,cnt); b=c.produce_variants(o,cnt)
     assert a==b and len(a)==3; assert c.store.one('SELECT COUNT(*) n FROM artifacts WHERE content_id=?',(cnt,))['n']==3; d.cleanup()
+
+
+def test_failed_image_provider_run_is_persisted():
+    from chuma_ip_factory.core import ImageProvider
+    class FailingProvider(ImageProvider):
+        name='failing-test-image'
+        def generate(self, request):
+            raise RuntimeError('simulated_provider_failure')
+    d,cx=app(); cx.image_provider=FailingProvider(); o=cx.owner(); cid=cx.create_character(o,'Failure')
+    try:
+        cx.initialize_character(o,cid)
+        assert False
+    except RuntimeError:
+        pass
+    run=cx.store.one("SELECT status,provider,response_json FROM provider_runs WHERE owner_id=? ORDER BY created_at DESC LIMIT 1",(o,))
+    assert run['status']=='FAILED'
+    assert run['provider']=='failing-test-image'
+    assert 'simulated_provider_failure' in run['response_json']
+    d.cleanup()
