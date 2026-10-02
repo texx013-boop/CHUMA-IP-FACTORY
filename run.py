@@ -8,11 +8,14 @@ if str(APP_ROOT) not in sys.path:
 
 from chuma_ip_factory.api import run
 from chuma_ip_factory.core import HTTPImageProvider
+from chuma_ip_factory.hf_image import HFImageProvider
 from chuma_ip_factory.budget import BudgetGuardProvider, BudgetPolicy
 
 
 if __name__ == '__main__':
     policy = BudgetPolicy.from_env()
+    hf_token = os.getenv('HF_TOKEN')
+    hf_cost_class = 'free-credit'
     endpoint = os.getenv('CHUMA_IMAGE_ENDPOINT')
     api_key = os.getenv('CHUMA_IMAGE_API_KEY')
     retry_attempts = int(os.getenv('CHUMA_IMAGE_RETRY_ATTEMPTS', '3'))
@@ -21,7 +24,9 @@ if __name__ == '__main__':
     cost_class = os.getenv('CHUMA_IMAGE_COST_CLASS', 'metered').strip().lower()
 
     provider = None
-    if endpoint and api_key and policy.allows(cost_class):
+    if hf_token and policy.allows(hf_cost_class):
+        provider = HFImageProvider(hf_token)
+    elif endpoint and api_key and policy.allows(cost_class):
         candidate = HTTPImageProvider(
             endpoint, api_key,
             max_attempts=retry_attempts,
