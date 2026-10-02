@@ -108,19 +108,32 @@ class ImageProvider:
 class HTTPImageProvider(ImageProvider):
     name='http-image-provider'
     connected=False
-    def __init__(self,endpoint=None,api_key=None):
+    def __init__(self,endpoint=None,api_key=None,max_attempts=3,timeout=120,retry_delay=0.25):
         self.endpoint=endpoint; self.api_key=api_key; self.connected=bool(endpoint and api_key)
+        self.max_attempts=max(1,int(max_attempts)); self.timeout=max(1,int(timeout)); self.retry_delay=max(0.0,float(retry_delay))
     def generate(self,request:dict)->dict:
         if not self.connected: raise ProviderNotConnected('image_provider_not_connected')
         req=urllib.request.Request(self.endpoint,data=json.dumps(request,ensure_ascii=False).encode(),
             headers={'Content-Type':'application/json','Authorization':f'Bearer {self.api_key}'},method='POST')
-        with urllib.request.urlopen(req,timeout=120) as r: response=json.loads(r.read().decode())
-        raw=response.get('image_base64')
-        if not raw: raise CHUMAError('provider_response_missing_image_base64')
-        data=base64.b64decode(raw)
-        return {'asset_id':uid('ASSET'),'kind':'IMAGE','status':'APPROVED',
-                'meta':{'provider':self.name,'request':request,'response_keys':sorted(response.keys()),'generated_at':now()},
-                'content_hash':hashlib.sha256(data).hexdigest(),'bytes':data,'mime_type':response.get('mime_type','image/png')}
+        last=None
+        for attempt in range(1,self.max_attempts+1):
+            try:
+                with urllib.request.urlopen(req,timeout=self.timeout) as r: response=json.loads(r.read().decode())
+                raw=response.get('image_base64')
+                if not raw: raise CHUMAError('provider_response_missing_image_base64')
+                try: data=base64.b64decode(raw,validate=True)
+                except Exception as exc: raise CHUMAError('provider_response_invalid_image_base64') from exc
+                return {'asset_id':uid('ASSET'),'kind':'IMAGE','status':'APPROVED',
+                        'meta':{'provider':self.name,'request':request,'response_keys':sorted(response.keys()),'attempts':attempt,'max_attempts':self.max_attempts,'generated_at':now()},
+                        'content_hash':hashlib.sha256(data).hexdigest(),'bytes':data,'mime_type':response.get('mime_type','image/png')}
+            except urllib.error.HTTPError as exc:
+                last=exc
+                if exc.code not in (429,500,502,503,504) or attempt>=self.max_attempts: raise
+            except (urllib.error.URLError, TimeoutError, ConnectionError) as exc:
+                last=exc
+                if attempt>=self.max_attempts: raise
+            if self.retry_delay: time.sleep(self.retry_delay*(2**(attempt-1)))
+        raise last or CHUMAError('provider_request_failed')
 
 class DistributionProvider:
     name='test-local-distribution'
@@ -135,7 +148,7 @@ class CHUMA:
         self.store=Store(db_path); self.asset_root=Path(asset_root); self.asset_root.mkdir(parents=True,exist_ok=True)
         self.image_provider=image_provider or ImageProvider(); self.distribution=distribution_provider or DistributionProvider()
     def provider_status(self):
-        return {'name':getattr(self.image_provider,'name','unknown'),'connected':bool(getattr(self.image_provider,'connected',False)),'version':VERSION}
+        return {'name':getattr(self.image_provider,'name','unknown'),'connected':bool(getattr(self.image_provider,'connected',False)),'version':VERSION,'retry':{'max_attempts':getattr(self.image_provider,'max_attempts',1),'timeout':getattr(self.image_provider,'timeout',None),'retry_delay':getattr(self.image_provider,'retry_delay',None)}}
     def owner(self):
         oid=uid('OWN'); self.store.db.execute('INSERT INTO owners VALUES(?,?)',(oid,now())); self.store.commit(); self.store.audit(oid,'OWNER_CREATED',oid,{}); return oid
     def session(self,owner):
@@ -180,7 +193,7 @@ class CHUMA:
                               'error_type':type(exc).__name__})
             raise
         self.store.db.execute('INSERT INTO assets VALUES(?,?,?,?,?,?,?,?)',(result['asset_id'],owner,cid,kind,result['status'],json.dumps(result['meta'],ensure_ascii=False),result['content_hash'],now()))
-        self.store.db.execute('INSERT INTO provider_runs VALUES(?,?,?,?,?,?,?,?)',(run_id,owner,getattr(self.image_provider,'name','unknown'),'IMAGE_GENERATE',json.dumps(req,ensure_ascii=False),json.dumps({'content_hash':result['content_hash'],'mime_type':result.get('mime_type')},ensure_ascii=False),'SUCCEEDED',now()))
+        self.store.db.execute('INSERT INTO provider_runs VALUES(?,?,?,?,?,?,?,?)',(run_id,owner,getattr(self.image_provider,'name','unknown'),'IMAGE_GENERATE',json.dumps(req,ensure_ascii=False),json.dumps({'content_hash':result['content_hash'],'mime_type':result.get('mime_type'),'provider_meta':result.get('meta',{})},ensure_ascii=False),'SUCCEEDED',now()))
         if result.get('bytes') is not None:
             ext='svg' if result.get('mime_type')=='image/svg+xml' else 'bin'
             path=self.asset_root/f"{result['asset_id']}.{ext}"; path.write_bytes(result['bytes'])
@@ -261,11 +274,53 @@ class CHUMA:
         external_id=self.publish(owner,pub)
         learned=self.ingest_metrics_and_learn(owner,pub)
         return {'character_id':cid,'content_id':content,'publication_id':pub,'external_id':external_id,'variants':len(variants),'initialization':init,'next_action':self.next_action(owner,cid),**learned}
+    def enqueue_job(self,owner,kind,payload,idempotency_key=None):
+        self._auth(owner)
+        key=idempotency_key or stable_hash({'kind':kind,'payload':payload})
+        existing=self.store.one('SELECT job_id FROM jobs WHERE owner_id=? AND idempotency_key=?',(owner,key))
+        if existing: return existing['job_id']
+        jid=uid('JOB'); t=now()
+        self.store.db.execute('INSERT INTO jobs VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',(jid,owner,kind,json.dumps(payload,ensure_ascii=False),'QUEUED',0,t,key,t,t,None)); self.store.commit()
+        self.store.event(owner,'JOB_QUEUED','JOB',jid,{'kind':kind,'idempotency_key':key})
+        return jid
+    def claim_job(self,job_id=None):
+        if job_id:
+            row=self.store.one("SELECT * FROM jobs WHERE job_id=? AND status='QUEUED' AND next_run_at<=?",(job_id,now()))
+        else:
+            row=self.store.one("SELECT * FROM jobs WHERE status='QUEUED' AND next_run_at<=? ORDER BY created_at LIMIT 1",(now(),))
+        if not row: return None
+        self.store.db.execute("UPDATE jobs SET status='RUNNING',attempts=attempts+1,updated_at=? WHERE job_id=? AND status='QUEUED'",(now(),row['job_id']))
+        self.store.commit()
+        return self.store.one('SELECT * FROM jobs WHERE job_id=?',(row['job_id'],))
+    def get_job(self,job_id):
+        row=self.store.one('SELECT * FROM jobs WHERE job_id=?',(job_id,))
+        if not row: return None
+        out=dict(row); out['payload']=json.loads(out.pop('payload_json')); return out
+    def run_job(self,job_id):
+        row=self.claim_job(job_id)
+        if not row: return self.get_job(job_id)
+        payload=json.loads(row['payload_json']); owner=row['owner_id']
+        try:
+            if row['kind']=='AUTONOMOUS_CYCLE':
+                self.autonomous_cycle(owner,payload['character_id'],payload.get('platform','local-test'))
+            else:
+                raise CHUMAError('unknown_job_kind')
+            self.store.db.execute("UPDATE jobs SET status='SUCCEEDED',updated_at=?,error=NULL WHERE job_id=?",(now(),job_id)); self.store.commit()
+            self.store.event(owner,'JOB_SUCCEEDED','JOB',job_id,{'kind':row['kind']})
+        except Exception as exc:
+            attempts=int(row['attempts']); max_attempts=max(1,int(payload.get('max_attempts',3)))
+            terminal=attempts>=max_attempts
+            status='DEAD_LETTER' if terminal else 'QUEUED'
+            delay=min(300,2**max(0,attempts-1))
+            self.store.db.execute("UPDATE jobs SET status=?,next_run_at=?,updated_at=?,error=? WHERE job_id=?",(status,now() if terminal else now()+delay,now(),f'{type(exc).__name__}: {exc}',job_id)); self.store.commit()
+            self.store.event(owner,'JOB_DEAD_LETTERED' if terminal else 'JOB_RETRY_SCHEDULED','JOB',job_id,{'attempt':attempts,'max_attempts':max_attempts,'error':str(exc),'retry_in':delay})
+        return self.get_job(job_id)
     def status(self,owner):
         self._auth(owner); out={}
         for table in ['characters','assets','content','experiments','publications','signals','audience_memory','decisions','jobs','events','audit','image_briefs','artifacts','provider_runs']:
             out[table]=self.store.one(f'SELECT COUNT(*) n FROM {table} WHERE owner_id=?',(owner,))['n']
         out['version']=VERSION; out['schema_version']=SCHEMA_VERSION
+        out['jobs_detail']=[self.get_job(r['job_id']) for r in self.store.q('SELECT job_id FROM jobs WHERE owner_id=? ORDER BY created_at DESC LIMIT 20',(owner,))]
         chars=self.store.q('SELECT character_id,name,state,version FROM characters WHERE owner_id=? ORDER BY created_at',(owner,))
         out['characters_detail']=[dict(c) for c in chars]
         return out
