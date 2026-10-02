@@ -12,7 +12,10 @@ from chuma_ip_factory.core import HTTPImageProvider
 if __name__ == '__main__':
     endpoint = os.getenv('CHUMA_IMAGE_ENDPOINT')
     api_key = os.getenv('CHUMA_IMAGE_API_KEY')
-    provider = HTTPImageProvider(endpoint, api_key) if endpoint and api_key else None
+    retry_attempts = int(os.getenv('CHUMA_IMAGE_RETRY_ATTEMPTS', '3'))
+    retry_delay = float(os.getenv('CHUMA_IMAGE_RETRY_DELAY', '0.25'))
+    timeout = int(os.getenv('CHUMA_IMAGE_TIMEOUT', '120'))
+    provider = HTTPImageProvider(endpoint, api_key, max_attempts=retry_attempts, timeout=timeout, retry_delay=retry_delay) if endpoint and api_key else None
     host = os.getenv('CHUMA_HOST', '0.0.0.0')
     port = int(os.getenv('PORT', os.getenv('CHUMA_PORT', '8097')))
     data_dir = Path(os.getenv('CHUMA_DATA_DIR', str(APP_ROOT / 'runtime')))
