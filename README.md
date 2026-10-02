@@ -7,7 +7,9 @@ Private repository for the CHUMA IP FACTORY / CHUMA OS implementation.
 - Architecture: Master Architecture 2.0
 - Image-first production strategy
 - Owner is not the daily operator
-- Current production milestone: 2.5.4
+- Current production milestone: 2.5.5
+- Zero-budget-first spending policy: free by default, paid generation requires explicit opt-in
+- No subscriptions or automatic provider upgrades
 - Durable autonomous job queue with idempotency, retries and dead-letter handling
 - Background worker for non-blocking cycle execution
 - External image-provider retry/backoff with persisted provider-run outcomes
