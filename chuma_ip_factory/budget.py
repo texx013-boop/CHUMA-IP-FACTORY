@@ -35,7 +35,7 @@ class BudgetPolicy:
         return cls(mode, allow_paid, soft, hard)
 
     def allows(self, cost_class: str) -> bool:
-        if (cost_class or "free").strip().lower() == "free":
+        if (cost_class or "free").strip().lower() in {"free", "free-credit", "zero-cost"}:
             return True
         return self.allow_paid and self.mode in {"micro", "production"}
 
