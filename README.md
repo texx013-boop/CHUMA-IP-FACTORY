@@ -15,6 +15,8 @@ Private repository for the CHUMA IP FACTORY / CHUMA OS implementation.
 - External image-provider retry/backoff with persisted provider-run outcomes
 - Liveness and database readiness endpoints
 - External provider integrations remain explicitly disconnected until authorized
+- Zero-budget-first: Hugging Face routed inference is the default AI path when a token is supplied; paid generation remains OFF unless explicitly enabled
+- No monthly subscription is required; Hugging Face documents a small monthly free credit for free users, and extra usage requires purchased credits
 - Cloud runtime: Railway
 - Current production smoke test: public HTTP UI online
 
