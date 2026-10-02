@@ -42,6 +42,18 @@ def test_http_health_and_auth_contract():
             payload = json.loads(r.read().decode())
             assert payload["name"] == "test-local-image"
             assert payload["connected"] is True
+
+        oversized = urllib.request.Request(
+            base + "/owners",
+            data=b"x" * (API.MAX_BODY_BYTES + 1),
+            method="POST",
+            headers={"Authorization": "Bearer test-admin-token", "Content-Type": "application/json"},
+        )
+        try:
+            urllib.request.urlopen(oversized, timeout=5)
+            assert False, "oversized request was accepted"
+        except urllib.error.HTTPError as e:
+            assert e.code == 413
     finally:
         server.shutdown()
         server.server_close()
