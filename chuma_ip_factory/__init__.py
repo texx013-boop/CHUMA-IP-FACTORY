@@ -1,0 +1,2 @@
+from .core import CHUMA, VERSION, SCHEMA_VERSION
+__all__=['CHUMA','VERSION','SCHEMA_VERSION']
