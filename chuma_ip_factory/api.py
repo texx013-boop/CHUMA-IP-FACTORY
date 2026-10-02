@@ -62,9 +62,9 @@ class API(BaseHTTPRequestHandler):
 def worker_loop(factory,stop_event):
     while not stop_event.is_set():
         try:
-            job=factory.claim_job()
-            if job:
-                factory.run_job(job['job_id'])
+            row=factory.store.one("SELECT job_id FROM jobs WHERE status='QUEUED' AND next_run_at<=? ORDER BY created_at LIMIT 1",(int(time.time()),))
+            if row:
+                factory.run_job(row['job_id'])
                 continue
         except Exception:
             time.sleep(1)
