@@ -2,7 +2,7 @@ import pathlib
 import tempfile
 
 from chuma_ip_factory import CHUMA
-from chuma_ip_factory.core import ImageProvider
+from chuma_ip_factory.core import ImageProvider, uid
 
 
 class CaptureProvider(ImageProvider):
@@ -17,7 +17,7 @@ class CaptureProvider(ImageProvider):
         data = b"reference-aware-test-image"
         import hashlib
         return {
-            "asset_id": "ASSET-captured",
+            "asset_id": uid("ASSET"),
             "kind": "IMAGE",
             "status": "APPROVED",
             "meta": {"provider": self.name, "request": request},
