@@ -48,6 +48,7 @@ Current Video Combain capabilities:
 - deduplicate repeated image → video requests;
 - persist jobs across restart;
 - write rendered artifacts atomically through a temporary file and rename;
+- verify source-artifact filesystem containment and SHA-256 integrity immediately before rendering;
 - verify the final artifact with SHA-256 before marking it READY;
 - expose the latest image → video flow directly in SHUMA.SPACE.
 
@@ -83,3 +84,4 @@ Current Video Combain hardening includes tests for image → video chaining, ide
 - Owner listing is itself scoped and never returns other owners' characters.
 - Artifact downloads verify owner scope, filesystem containment, and SHA-256 integrity before serving bytes.
 - Video Combain validates character/content/artifact provenance both at job creation and again immediately before rendering.
+- Video job listing supports an owner-scoped `character_id` filter and rejects foreign-character filters.
