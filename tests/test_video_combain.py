@@ -332,6 +332,44 @@ def test_video_combain_artifact_is_atomically_written_and_has_expected_digest():
     d.cleanup()
 
 
+def test_video_combain_revalidates_provenance_before_render():
+    d = tempfile.TemporaryDirectory()
+    factory = CHUMA(Path(d.name) / "db.sqlite", Path(d.name) / "media")
+    owner = factory.owner()
+    character_id = factory.create_character(owner, "Queued Provenance")
+    factory.initialize_character(owner, character_id)
+    content_id = factory.create_content(owner, character_id)
+    factory.qc(owner, content_id)
+    artifact = factory.store.one(
+        "SELECT artifact_id FROM artifacts WHERE owner_id=? AND content_id=? AND status='READY' LIMIT 1",
+        (owner, content_id),
+    )
+    video = VideoCombain(factory)
+    job = video.create_job(
+        owner, character_id,
+        source_content_id=content_id,
+        source_asset_ids=[artifact["artifact_id"]],
+    )
+
+    factory.store.db.execute(
+        "UPDATE artifacts SET status='REJECTED' WHERE artifact_id=?",
+        (artifact["artifact_id"],),
+    )
+    factory.store.commit()
+
+    try:
+        video.run_job(job["video_job_id"])
+        assert False, "stale queued provenance was rendered"
+    except RuntimeError as exc:
+        assert str(exc) == "source_asset_forbidden"
+
+    failed = video.get_job(job["video_job_id"])
+    assert failed["status"] == "FAILED"
+    assert failed["error"] == "source_asset_forbidden"
+    factory.store.close()
+    d.cleanup()
+
+
 def test_video_combain_rejects_foreign_provenance_inputs():
     d = tempfile.TemporaryDirectory()
     factory = CHUMA(Path(d.name) / "db.sqlite", Path(d.name) / "media")
