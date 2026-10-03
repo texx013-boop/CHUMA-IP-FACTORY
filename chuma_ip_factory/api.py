@@ -207,13 +207,16 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLower
         if self.path.startswith('/artifacts/'):
             if not self.require_auth(): return
             aid=self.path.split('/')[-1]
-            row=self.factory.store.one('SELECT storage_path,mime_type FROM artifacts WHERE artifact_id=?',(aid,))
+            row=self.factory.store.one('SELECT storage_path,mime_type,digest FROM artifacts WHERE artifact_id=?',(aid,))
             if not row: return self.sendj(404,{'error':'artifact_not_found'})
             p=Path(row['storage_path']).resolve()
             root=Path(self.factory.asset_root).resolve()
             if root not in p.parents: return self.sendj(403,{'error':'forbidden'})
             try: data=p.read_bytes()
             except FileNotFoundError: return self.sendj(404,{'error':'artifact_file_not_found'})
+            digest = __import__('hashlib').sha256(data).hexdigest()
+            if row.get('digest') and not hmac.compare_digest(digest, row['digest']):
+                return self.sendj(409,{'error':'artifact_integrity_failed'})
             self.send_response(200); self.send_header('Content-Type',row['mime_type']); self.send_header('Cache-Control','no-store'); self.send_header('Content-Length',str(len(data))); self.end_headers(); self.wfile.write(data); return
         if not self.require_auth(): return
         if self.path=='/video/status': return self.sendj(200,self.video_combain.status())
