@@ -46,12 +46,14 @@ class HTTPVideoEngine:
     mode = "api"
 
     def __init__(self, endpoint: str | None = None, api_key: str | None = None,
-                 max_attempts: int = 2, timeout: int = 300, retry_delay: float = 1.0):
+                 max_attempts: int = 2, timeout: int = 300, retry_delay: float = 1.0,
+                 max_output_bytes: int = 256 * 1024 * 1024):
         self.endpoint = endpoint
         self.api_key = api_key
         self.max_attempts = max(1, int(max_attempts))
         self.timeout = max(1, int(timeout))
         self.retry_delay = max(0.0, float(retry_delay))
+        self.max_output_bytes = max(1, int(max_output_bytes))
         self.connected = bool(endpoint and api_key)
 
     def render(self, request: dict[str, Any]) -> dict[str, Any]:
@@ -80,7 +82,9 @@ class HTTPVideoEngine:
                 if url:
                     download_req = urllib.request.Request(url, headers={"User-Agent": "SHUMA.SPACE/1.0"})
                     with urllib.request.urlopen(download_req, timeout=self.timeout) as response:
-                        data = response.read()
+                        data = response.read(self.max_output_bytes + 1)
+                    if len(data) > self.max_output_bytes:
+                        raise RuntimeError("video_provider_output_too_large")
                     return {"kind": "video", "mime_type": payload.get("mime_type", "video/mp4"),
                             "bytes": data,
                             "provider_response": {"keys": sorted(payload.keys()), "attempt": attempt}}
@@ -200,6 +204,8 @@ class VideoCombain:
             data = rendered["bytes"]
             if not isinstance(data, (bytes, bytearray)) or not data:
                 raise RuntimeError("video_provider_empty_output")
+            if len(data) > getattr(engine, "max_output_bytes", 256 * 1024 * 1024):
+                raise RuntimeError("video_provider_output_too_large")
             kind = rendered.get("kind", "video")
             mime_type = rendered.get("mime_type", "video/mp4")
             ext = "json" if kind == "manifest" else "mp4"
@@ -224,6 +230,34 @@ class VideoCombain:
                                   ("FAILED", str(exc), int(time.time()), video_job_id))
             self.store.commit()
             raise
+
+    def create_job_from_content(self, owner_id: str, content_id: str,
+                                brief: dict[str, Any] | None = None,
+                                engine: str = "test-manifest") -> dict[str, Any]:
+        row = self.store.one(
+            "SELECT content_id,character_id FROM content WHERE content_id=? AND owner_id=?",
+            (content_id, owner_id),
+        )
+        if not row:
+            raise ValueError("content_not_found")
+        assets = self.store.q(
+            "SELECT artifact_id FROM artifacts WHERE owner_id=? AND content_id=? "
+            "AND status='READY' ORDER BY created_at DESC",
+            (owner_id, content_id),
+        )
+        source_asset_ids = [a["artifact_id"] for a in assets]
+        if not source_asset_ids:
+            raise ValueError("content_has_no_ready_artifacts")
+        payload = dict(brief or {})
+        payload.setdefault("source", "image-content")
+        return self.create_job(
+            owner_id,
+            row["character_id"],
+            source_content_id=content_id,
+            source_asset_ids=source_asset_ids,
+            brief=payload,
+            engine=engine,
+        )
 
     def get_job(self, video_job_id: str):
         row = self.store.one("SELECT * FROM video_jobs WHERE video_job_id=?", (video_job_id,))
