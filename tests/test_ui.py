@@ -26,3 +26,12 @@ def test_cloud_environment_contract_details():
     assert "os.getenv('CHUMA_MEDIA_DIR'" in run_src
     assert "os.getenv('CHUMA_IMAGE_ENDPOINT'" in run_src
     assert "os.getenv('CHUMA_IMAGE_API_KEY'" in run_src
+
+
+def test_chuma_ui_live_telemetry_contract():
+    import pathlib
+    src=(pathlib.Path(__file__).parents[1]/'chuma_ip_factory'/'api.py').read_text(encoding='utf-8')
+    assert 'health-badge' in src
+    assert 'job-badge' in src
+    assert "setInterval(()=>{if(owner)status()" in src
+    assert 'SYSTEM READY' in src
