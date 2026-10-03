@@ -516,3 +516,36 @@ def test_video_combain_rejects_mutated_source_content_before_render():
     assert failed["error"] == "content_not_found"
     factory.store.close()
     d.cleanup()
+
+
+
+def test_video_combain_rejects_source_artifact_path_escape_before_render():
+    d = tempfile.TemporaryDirectory()
+    factory = CHUMA(Path(d.name) / "db.sqlite", Path(d.name) / "media")
+    owner = factory.owner()
+    character_id = factory.create_character(owner, "Path Escape")
+    factory.initialize_character(owner, character_id)
+    content_id = factory.create_content(owner, character_id)
+    factory.qc(owner, content_id)
+    factory.produce_variants(owner, content_id)
+    artifact = factory.store.one(
+        "SELECT artifact_id FROM artifacts WHERE owner_id=? AND content_id=? AND status='READY' LIMIT 1",
+        (owner, content_id),
+    )
+    outside = Path(d.name) / "outside.bin"
+    outside.write_bytes(b"outside")
+    factory.store.db.execute("UPDATE artifacts SET storage_path=?,content_hash=? WHERE artifact_id=?",
+                             (str(outside), hashlib.sha256(b"outside").hexdigest(), artifact["artifact_id"]))
+    factory.store.commit()
+    video = VideoCombain(factory)
+    job = video.create_job(owner, character_id, source_content_id=content_id, source_asset_ids=[artifact["artifact_id"]])
+    try:
+        video.run_job(job["video_job_id"])
+        assert False, "source artifact path escape was rendered"
+    except RuntimeError as exc:
+        assert str(exc) == "source_asset_path_forbidden"
+    failed = video.get_job(job["video_job_id"])
+    assert failed["status"] == "FAILED"
+    assert failed["error"] == "source_asset_path_forbidden"
+    factory.store.close()
+    d.cleanup()
