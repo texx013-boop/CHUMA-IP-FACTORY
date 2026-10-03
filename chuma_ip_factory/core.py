@@ -255,7 +255,7 @@ class CHUMA:
     def create_content(self,owner,cid,idea=None):
         self._auth(owner); character=self.store.one('SELECT name FROM characters WHERE character_id=? AND owner_id=?',(cid,owner))
         if not character: raise AuthorizationError()
-        assets=self.store.q("SELECT * FROM assets WHERE character_id=? AND owner_id=? AND status='APPROVED' ORDER BY created_at",(cid,owner))
+        assets=[dict(a) for a in self.store.q("SELECT * FROM assets WHERE character_id=? AND owner_id=? AND status='APPROVED' ORDER BY created_at",(cid,owner))]
         idea=idea or {'mechanic':'identity_discovery','hook':'visual curiosity'}
         character_row=self.store.one('SELECT card_json FROM characters WHERE character_id=? AND owner_id=?',(cid,owner))
         dna=json.loads(character_row['card_json'] or '{}') if character_row else {}
@@ -340,7 +340,7 @@ class CHUMA:
         existing=self.store.one('SELECT job_id FROM jobs WHERE owner_id=? AND idempotency_key=?',(owner,key))
         if existing: return existing['job_id']
         jid=uid('JOB'); t=now()
-        self.store.db.execute('INSERT INTO jobs VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',(jid,owner,kind,json.dumps(payload,ensure_ascii=False),'QUEUED',0,t,key,t,t,None)); self.store.commit()
+        self.store.db.execute('INSERT INTO jobs VALUES(?,?,?,?,?,?,?,?,?,?,?)',(jid,owner,kind,json.dumps(payload,ensure_ascii=False),'QUEUED',0,t,key,t,t,None)); self.store.commit()
         self.store.event(owner,'JOB_QUEUED','JOB',jid,{'kind':kind,'idempotency_key':key})
         return jid
     def claim_job(self,job_id=None):
