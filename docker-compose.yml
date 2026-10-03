@@ -1,0 +1,49 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: chuma
+      POSTGRES_USER: chuma
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-chuma-local-change-me}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U chuma -d chuma"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    volumes:
+      - chuma_pgdata:/var/lib/postgresql/data
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      CHUMA_HOST: 0.0.0.0
+      PORT: 8097
+      DATABASE_URL: postgresql://chuma:${POSTGRES_PASSWORD:-chuma-local-change-me}@db:5432/chuma
+      CHUMA_DATA_DIR: /data
+      CHUMA_MEDIA_DIR: /data/media
+      CHUMA_ADMIN_TOKEN: ${CHUMA_ADMIN_TOKEN:-change-me-local}
+      CHUMA_SPEND_MODE: ${CHUMA_SPEND_MODE:-free}
+      CHUMA_ALLOW_PAID_GENERATION: ${CHUMA_ALLOW_PAID_GENERATION:-false}
+      CHUMA_MONTHLY_SOFT_CAP_USD: ${CHUMA_MONTHLY_SOFT_CAP_USD:-0}
+      CHUMA_MONTHLY_HARD_CAP_USD: ${CHUMA_MONTHLY_HARD_CAP_USD:-0}
+    ports:
+      - "8097:8097"
+    volumes:
+      - chuma_appdata:/data
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8097/health', timeout=3)\""]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+
+volumes:
+  chuma_pgdata:
+  chuma_appdata:
