@@ -388,7 +388,7 @@ def recover_exhausted_reference_jobs(factory):
                 key,
             )
     except Exception as exc:
-        print(f"CHUMA recovery scan deferred: {type(exc).__name__}: {exc}", flush=True)
+        print(f"CHUMA recovery scan deferred: {type(exc).__name__}", flush=True)
 
 def worker_loop(factory,stop_event):
     last_recovery=0
@@ -427,7 +427,7 @@ def run(host='127.0.0.1',port=8097,db='runtime/chuma.db',asset_root='runtime/med
                 f.store.db.execute("INSERT INTO meta(k,v) VALUES('autostart_v1',?)",('queued',))
                 f.store.commit()
         except Exception as exc:
-            print(f"CHUMA autostart bootstrap deferred: {type(exc).__name__}: {exc}", flush=True)
+            print(f"CHUMA autostart bootstrap deferred: {type(exc).__name__}", flush=True)
     stop_event=threading.Event()
     threading.Thread(target=worker_loop,args=(f,stop_event),daemon=True,name='chuma-worker').start()
     try:
