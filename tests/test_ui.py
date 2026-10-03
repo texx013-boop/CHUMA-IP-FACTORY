@@ -41,3 +41,11 @@ def test_ui_has_no_raw_alerts():
     import pathlib
     src=(pathlib.Path(__file__).parents[1]/'chuma_ip_factory'/'api.py').read_text(encoding='utf-8')
     assert 'alert(' not in src
+
+
+def test_chuma_quick_start_contract():
+    import pathlib
+    src=(pathlib.Path(__file__).parents[1]/'chuma_ip_factory'/'api.py').read_text(encoding='utf-8')
+    assert 'Быстрый старт' in src
+    assert 'async function quickStart()' in src
+    assert "sort((a,b)=>String(b.created_at||'').localeCompare(String(a.created_at||'')))" in src
