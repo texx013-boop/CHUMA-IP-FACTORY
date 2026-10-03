@@ -8,6 +8,7 @@ from http.server import HTTPServer
 
 from chuma_ip_factory.api import API
 from chuma_ip_factory import CHUMA
+from chuma_ip_factory.video_combain import VideoCombain
 
 
 def test_http_health_and_auth_contract():
@@ -75,7 +76,7 @@ def test_http_health_and_auth_contract():
             base + "/characters",
             data=json.dumps({"owner_id":owner_id,"name":"Queue API"}).encode(),
             method="POST",
-            headers={"Authorization": "Bearer test-admin-token", "Content-Type": "application/json"},
+            headers={"Authorization": "Bearer test-admin-token", "Content-Type": "application/json", "X-Owner-ID": owner_id},
         )
         with urllib.request.urlopen(char_req, timeout=5) as r:
             character_id=json.loads(r.read().decode())["character_id"]
@@ -213,7 +214,7 @@ def test_artifact_download_enforces_owner_scope():
         try: urllib.request.urlopen(req, timeout=5); assert False, "cross-owner artifact was served"
         except urllib.error.HTTPError as exc:
             assert exc.code == 403
-            assert json.loads(exc.read().decode())["error"] == "artifact_forbidden"
+            assert json.loads(exc.read().decode())["error"] == "owner_forbidden"
     finally:
         server.shutdown(); server.server_close(); API.factory, API.admin_token = previous_factory, previous_token; factory.store.close(); d.cleanup()
 
@@ -317,8 +318,8 @@ def test_api_character_profile_requires_matching_owner_scope():
             urllib.request.urlopen(req, timeout=5)
             assert False, "cross-owner character profile was exposed"
         except urllib.error.HTTPError as exc:
-            assert exc.code == 400
-            assert json.loads(exc.read().decode())["error"] == "AuthorizationError"
+            assert exc.code == 403
+            assert json.loads(exc.read().decode())["error"] == "owner_forbidden"
     finally:
         server.shutdown(); server.server_close()
         API.factory, API.admin_token = previous_factory, previous_token
@@ -330,7 +331,7 @@ def test_video_job_get_and_run_require_matching_owner_scope():
     factory = CHUMA(Path(d.name) / "db.sqlite", Path(d.name) / "media")
     owner = factory.owner(); other = factory.owner()
     cid = factory.create_character(owner, "Private Video Job")
-    job = factory.video_combain.create_job(owner, cid)
+    job = VideoCombain(factory).create_job(owner, cid)
     previous_factory, previous_token, previous_video = API.factory, API.admin_token, getattr(API, 'video_combain', None)
     from chuma_ip_factory.video_combain import VideoCombain
     API.factory, API.admin_token, API.video_combain = factory, "secret", VideoCombain(factory)
