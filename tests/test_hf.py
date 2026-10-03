@@ -2,8 +2,6 @@ import io
 import pathlib
 import tempfile
 
-import pytest
-
 from chuma_ip_factory.hf_image import HFImageProvider
 
 
@@ -69,11 +67,6 @@ def test_hf_provider_uses_text_to_image_without_reference(monkeypatch):
         },
     })
 
-    assert FakeClient.last.text_to_image_calls == [
-        (
-            pytest.approx(FakeClient.last.text_to_image_calls[0][0]),
-            "black-forest-labs/FLUX.1-Krea-dev",
-            1024,
-            1280,
-        )
-    ]
+    calls = FakeClient.last.text_to_image_calls
+    assert len(calls) == 1
+    assert calls[0][1:] == ("black-forest-labs/FLUX.1-Krea-dev", 1024, 1280)
