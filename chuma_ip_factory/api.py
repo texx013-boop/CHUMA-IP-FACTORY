@@ -71,7 +71,7 @@ pre{margin:0;background:#090b0e;border:1px solid var(--line);padding:14px;border
 <main>
   <div class="topbar" id="overview">
     <div><div class="eyebrow">Image Content Factory</div><div class="top-title">Рабочее пространство</div></div>
-    <div class="status-pill"><span class="status-dot"></span><span id="provider">Подключение…</span></div>
+    <div style="display:flex;align-items:center;gap:10px"><button class="secondary" onclick="createOwner()">Создать владельца</button><div class="status-pill"><span class="status-dot"></span><span id="provider">Подключение…</span></div></div>
   </div>
 
   <section class="hero">
