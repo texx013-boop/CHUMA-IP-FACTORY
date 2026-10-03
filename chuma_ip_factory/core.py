@@ -232,6 +232,22 @@ class CHUMA:
         self.store.commit(); self.store.event(owner,'CHARACTER_REFERENCE_ATTACHED','ASSET',aid,{'character_id':cid,'artifact_id':arid,'mime_type':mime_type,'size_bytes':len(data)})
         return {'asset_id':aid,'artifact_id':arid,'character_id':cid,'mime_type':mime_type,'size_bytes':len(data)}
 
+    def attach_voice(self,owner,cid,data,mime_type='audio/mpeg',filename='voice'):
+        self._auth(owner)
+        row=self.store.one('SELECT * FROM characters WHERE character_id=? AND owner_id=?',(cid,owner))
+        if not row: raise AuthorizationError()
+        if not data or len(data)>25*1024*1024: raise ValueError('voice_file_too_large')
+        if not mime_type.startswith('audio/'): raise ValueError('voice_must_be_audio')
+        ext=(filename.rsplit('.',1)[-1] if '.' in filename else 'bin')[:8]
+        aid=uid('ASSET'); digest=hashlib.sha256(data).hexdigest(); path=self.asset_root/(aid+'.'+ext); path.write_bytes(data); t=now()
+        meta={'role':'character_voice','filename':filename,'mime_type':mime_type,'size_bytes':len(data)}
+        self.store.db.execute('INSERT INTO assets VALUES(?,?,?,?,?,?,?,?)',(aid,owner,cid,'VOICE','APPROVED',json.dumps(meta,ensure_ascii=False),digest,t))
+        arid=uid('ART'); self.store.db.execute('INSERT INTO artifacts VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',(arid,owner,cid,None,aid,'voice',mime_type,str(path),digest,'user-upload','READY',t))
+        card=json.loads(row['card_json'] or '{}'); card['voice_profile']={'source':'user','asset_id':aid,'artifact_id':arid,'filename':filename,'mime_type':mime_type}
+        self.store.db.execute('UPDATE characters SET card_json=?,updated_at=?,version=version+1 WHERE character_id=? AND owner_id=?',(json.dumps(card,ensure_ascii=False),t,cid,owner)); self.store.commit()
+        self.store.event(owner,'CHARACTER_VOICE_ATTACHED','ASSET',aid,{'character_id':cid,'artifact_id':arid,'mime_type':mime_type,'size_bytes':len(data)})
+        return {'asset_id':aid,'artifact_id':arid,'character_id':cid,'mime_type':mime_type,'size_bytes':len(data)}
+
     def initialize_character(self,owner,cid):
         self._auth(owner); row=self.store.one('SELECT * FROM characters WHERE character_id=? AND owner_id=?',(cid,owner))
         if not row: raise AuthorizationError()
