@@ -271,9 +271,11 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLower
             if not self.require_owner(owner): return
             return self.sendj(200,self.factory.status(owner))
         if self.path.startswith('/characters/') and self.path.endswith('/profile'):
-            cid=self.path.split('/')[2]; owner=self.request_owner()
-            if not owner: return self.sendj(403,{'error':'owner_forbidden'})
-            return self.sendj(200,self.factory.character_profile(owner,cid))
+            cid=self.path.split('/')[2]
+            target=self.factory.store.one('SELECT owner_id FROM characters WHERE character_id=?',(cid,))
+            if not target: return self.sendj(404,{'error':'character_not_found'})
+            if not self.require_owner(target['owner_id']): return
+            return self.sendj(200,self.factory.character_profile(target['owner_id'],cid))
         if self.path.startswith('/jobs/'):
             job=self.factory.get_job(self.path.split('/')[-1])
             if not job: return self.sendj(404,{'error':'job_not_found'})
@@ -290,9 +292,11 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLower
                     if n>25*1024*1024: self.rfile.read(25*1024*1024+1)
                     return self.sendj(413,{'error':'payload_too_large','message':'voice file must be <= 25 MiB'})
                 mime=self.headers.get('Content-Type','').split(';',1)[0].strip().lower(); owner=self.headers.get('X-Owner-ID','').strip(); cid=p.split('/')[2]
-                if not self.require_owner(owner): return
+                target=self.factory.store.one('SELECT owner_id FROM characters WHERE character_id=?',(cid,))
+                if not target: return self.sendj(404,{'error':'character_not_found'})
+                if not self.require_owner(target['owner_id']): return
                 body=self.rfile.read(n)
-                return self.sendj(201,self.factory.attach_voice(owner,cid,body,mime,self.headers.get('X-Filename','voice')))
+                return self.sendj(201,self.factory.attach_voice(target['owner_id'],cid,body,mime,self.headers.get('X-Filename','voice')))
             if p.startswith('/characters/') and p.endswith('/reference'):
                 if n<1 or n>10*1024*1024:
                     if n > 10*1024*1024: self.rfile.read(10*1024*1024+1)
@@ -300,9 +304,11 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLower
                 mime=self.headers.get('Content-Type','').split(';',1)[0].strip().lower()
                 owner=self.headers.get('X-Owner-ID','').strip()
                 cid=p.split('/')[2] if len(p.split('/'))>2 else ''
-                if not self.require_owner(owner): return
+                target=f.store.one('SELECT owner_id FROM characters WHERE character_id=?',(cid,))
+                if not target: return self.sendj(404,{'error':'character_not_found'})
+                if not self.require_owner(target['owner_id']): return
                 body=self.rfile.read(n)
-                result=f.attach_reference(owner,cid,body,mime,self.headers.get('X-Filename','reference'))
+                result=f.attach_reference(target['owner_id'],cid,body,mime,self.headers.get('X-Filename','reference'))
                 return self.sendj(201,result)
             if n<0 or n>self.MAX_BODY_BYTES:
                 if n > self.MAX_BODY_BYTES: self.rfile.read(self.MAX_BODY_BYTES+1)
