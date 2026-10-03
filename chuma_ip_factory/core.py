@@ -157,7 +157,19 @@ class CHUMA:
     def _auth(self,owner):
         if not self.store.one('SELECT 1 FROM owners WHERE owner_id=?',(owner,)): raise AuthorizationError()
     def create_character(self,owner,name,card=None):
-        self._auth(owner); card=card or {'name':name,'owner_defined':True}
+        self._auth(owner)
+        card=card or {'name':name,'owner_defined':True}
+        if str(name).strip().lower() == 'леся':
+            card.update({
+                'character_dna': {
+                    'appearance': {'age':'25–30','hair':'рыжий/медный боб с чёлкой','eyes':'зелёные/серо-зелёные','skin':'светлая с веснушками','build':'стройная, подтянутая','face':'естественная асимметрия, выразительный взгляд'},
+                    'personality':['наблюдательная','уверенная без демонстративности','лёгкая ирония','спокойная','слегка загадочная','ценит комфорт и эстетику'],
+                    'behavior': {'gaze':'прямой взгляд в камеру','movements':'медленные, плавные, точные','expressions':['скептическая улыбка','удивление без эмоций','спокойный взгляд сквозь','лёгкое приподнятие брови','полное игнорирование абсурда']},
+                    'signature_movements':['лёгкий наклон головы','касание волос/чёлки','игра с чашкой/ложкой','медленное движение рукой','поворот головы со взглядом в камеру'],
+                    'style':'современный минимализм, комфорт + эстетика',
+                    'brand_easter_egg':'маленькая вышивка CHUMA на одежде'
+                }
+            })
         cid=uid('CH'); t=now(); genome={'immutable':{'identity_lock':True},'editable':{},'learned':{},'emergent':{}}
         dna={'preferred_formats':['single_image','carousel'],'preferred_hooks':[],'successful_mechanics':[],'fatigue':{}}
         self.store.db.execute('INSERT INTO characters VALUES(?,?,?,?,?,?,?,?,?,?)',(cid,owner,name,'BIRTH',json.dumps(card,ensure_ascii=False),json.dumps(genome),json.dumps(dna),t,t,1))
