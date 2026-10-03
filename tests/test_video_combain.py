@@ -135,6 +135,46 @@ def test_video_combain_can_build_job_from_latest_ready_image_content():
     d.cleanup()
 
 
+def test_video_http_rejects_non_http_download_url():
+    from unittest.mock import patch
+    from chuma_ip_factory import video_combain as module
+
+    class ApiResponse:
+        def __enter__(self): return self
+        def __exit__(self, exc_type, exc, tb): return False
+        def read(self, size=-1):
+            return __import__("json").dumps({"video_url": "file:///tmp/video.mp4"}).encode()
+
+    engine = HTTPVideoEngine("https://example.invalid", "token", max_output_bytes=16)
+    with patch.object(module.urllib.request, "urlopen", return_value=ApiResponse()) as mocked:
+        try:
+            engine.render({"test": True})
+            assert False, "non-http video URL was accepted"
+        except RuntimeError as exc:
+            assert str(exc) == "video_provider_invalid_video_url"
+        mocked.assert_called_once()
+
+
+def test_video_http_rejects_embedded_credentials_in_download_url():
+    from unittest.mock import patch
+    from chuma_ip_factory import video_combain as module
+
+    class ApiResponse:
+        def __enter__(self): return self
+        def __exit__(self, exc_type, exc, tb): return False
+        def read(self, size=-1):
+            return __import__("json").dumps({"video_url": "https://user:pass@example.invalid/video.mp4"}).encode()
+
+    engine = HTTPVideoEngine("https://example.invalid", "token", max_output_bytes=16)
+    with patch.object(module.urllib.request, "urlopen", return_value=ApiResponse()) as mocked:
+        try:
+            engine.render({"test": True})
+            assert False, "credential-bearing video URL was accepted"
+        except RuntimeError as exc:
+            assert str(exc) == "video_provider_invalid_video_url"
+        mocked.assert_called_once()
+
+
 def test_video_http_download_output_limit():
     from unittest.mock import patch
     from chuma_ip_factory import video_combain as module
