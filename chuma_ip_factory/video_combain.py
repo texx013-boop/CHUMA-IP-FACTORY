@@ -54,6 +54,7 @@ class HTTPVideoEngine:
         self.timeout = max(1, int(timeout))
         self.retry_delay = max(0.0, float(retry_delay))
         self.max_output_bytes = max(1, int(max_output_bytes))
+        self.max_response_bytes = max(self.max_output_bytes + 1024 * 1024, int(self.max_output_bytes * 1.5) + 65536)
         self.connected = bool(endpoint and api_key)
 
     def render(self, request: dict[str, Any]) -> dict[str, Any]:
@@ -68,9 +69,14 @@ class HTTPVideoEngine:
         for attempt in range(1, self.max_attempts + 1):
             try:
                 with urllib.request.urlopen(req, timeout=self.timeout) as response:
-                    payload = json.loads(response.read().decode("utf-8"))
+                    response_data = response.read(self.max_response_bytes + 1)
+                if len(response_data) > self.max_response_bytes:
+                    raise RuntimeError("video_provider_response_too_large")
+                payload = json.loads(response_data.decode("utf-8"))
                 raw = payload.get("video_base64")
                 if raw:
+                    if not isinstance(raw, str) or len(raw) > ((self.max_output_bytes + 2) // 3) * 4:
+                        raise RuntimeError("video_provider_output_too_large")
                     try:
                         data = base64.b64decode(raw, validate=True)
                     except Exception as exc:
