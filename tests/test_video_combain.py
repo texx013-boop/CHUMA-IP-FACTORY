@@ -41,6 +41,7 @@ def test_video_combain_manifest_job_and_provenance():
         "SELECT * FROM artifacts WHERE artifact_id=?",
         (done["output_artifact_id"],),
     )
+    assert artifact["owner_id"] == owner
     assert artifact["character_id"] == character_id
     assert artifact["content_id"] == "CONTENT-1"
     assert artifact["provider"] == "test-manifest"
