@@ -192,6 +192,7 @@ show();boot();
             p=self.path; f=self.factory
             if p.startswith('/characters/') and p.endswith('/reference'):
                 if n<1 or n>10*1024*1024:
+                    if n > 10*1024*1024: self.rfile.read(10*1024*1024+1)
                     return self.sendj(413,{'error':'payload_too_large','message':'reference image must be <= 10 MiB'})
                 mime=self.headers.get('Content-Type','').split(';',1)[0].strip().lower()
                 owner=self.headers.get('X-Owner-ID','').strip()
@@ -200,6 +201,7 @@ show();boot();
                 result=f.attach_reference(owner,cid,body,mime,self.headers.get('X-Filename','reference'))
                 return self.sendj(201,result)
             if n<0 or n>self.MAX_BODY_BYTES:
+                if n > self.MAX_BODY_BYTES: self.rfile.read(self.MAX_BODY_BYTES+1)
                 return self.sendj(413,{'error':'payload_too_large','message':'request body exceeds 1 MiB'})
             data=json.loads(self.rfile.read(n) or '{}')
             if p=='/owners': return self.sendj(201,{'owner_id':f.owner()})
