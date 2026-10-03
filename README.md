@@ -43,6 +43,12 @@ Current Video Combain capabilities:
 - respect the global zero-budget policy;
 - retry transient provider failures;
 - enforce provider response and output-size limits;
+- validate external video URLs before download;
+- reject embedded URL credentials;
+- deduplicate repeated image → video requests;
+- persist jobs across restart;
+- write rendered artifacts atomically through a temporary file and rename;
+- verify the final artifact with SHA-256 before marking it READY;
 - expose the latest image → video flow directly in SHUMA.SPACE.
 
 The external renderer is intentionally an adapter boundary: SHUMA.SPACE does not depend on one specific video provider.
@@ -70,4 +76,4 @@ A feature is considered complete only after:
 5. build/CI verification;
 6. saving the verified result to the repository.
 
-Current Video Combain hardening includes tests for image → video chaining and provider response/base64/output-size limits.
+Current Video Combain hardening includes tests for image → video chaining, idempotency, restart persistence, provider response/base64/output-size limits, URL validation, and atomic artifact integrity.
