@@ -228,10 +228,7 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLower
                 return self.sendj(409,{'error':'artifact_integrity_failed'})
             self.send_response(200); self.send_header('Content-Type',row['mime_type']); self.send_header('Cache-Control','no-store'); self.send_header('Content-Length',str(len(data))); self.end_headers(); self.wfile.write(data); return
         if not self.require_auth(): return
-        if self.path=='/video/status':
-            owner=self.request_owner()
-            if not owner: return self.sendj(403,{'error':'owner_forbidden'})
-            return self.sendj(200,self.video_combain.status(owner_id=owner))
+        if self.path=='/video/status': return self.sendj(200,self.video_combain.status())
         if self.path.startswith('/video/jobs/'):
             vid=self.path.split('/')[3]
             job=self.video_combain.get_job(vid)
