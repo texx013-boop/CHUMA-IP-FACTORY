@@ -7,6 +7,9 @@ def test_ui_defaults_and_no_cache_headers():
     assert 'value="CHUMA"' in s
     assert 'placeholder="Коротко опиши характер, визуальный образ и особенности…"' in s
     assert 'Cache-Control' in s and 'no-store' in s
+    assert '<title>SHUMA.SPACE · IP Factory</title>' in s
+    assert 'id="video-card"' in s
+    assert '/video/status' in s and '/video/jobs' in s
 
 def test_cloud_runtime_contract():
     import pathlib
