@@ -33,6 +33,7 @@ if __name__ == '__main__':
             max_attempts=int(os.getenv('CHUMA_VIDEO_RETRY_ATTEMPTS', '2')),
             timeout=int(os.getenv('CHUMA_VIDEO_TIMEOUT', '300')),
             retry_delay=float(os.getenv('CHUMA_VIDEO_RETRY_DELAY', '1.0')),
+            max_output_bytes=int(os.getenv('CHUMA_VIDEO_MAX_OUTPUT_BYTES', str(256 * 1024 * 1024))),
         )
         video_cost_class = os.getenv('CHUMA_VIDEO_COST_CLASS', 'metered').strip().lower()
         video_engine = BudgetVideoEngine(video_candidate, policy, cost_class=video_cost_class)
