@@ -6,7 +6,7 @@ Private repository for the CHUMA IP FACTORY / SHUMA.SPACE implementation.
 
 - User-facing product: **SHUMA.SPACE**
 - Internal core: **CHUMA IP FACTORY**
-- Version: **2.5.7**
+- Version: **2.5.8**
 - Architecture: Master Architecture 2.0
 - Image-first production strategy
 - Owner is not the daily operator
