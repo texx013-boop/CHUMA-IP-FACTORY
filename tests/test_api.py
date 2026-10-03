@@ -97,6 +97,46 @@ def test_http_health_and_auth_contract():
         d.cleanup()
 
 
+
+def test_artifact_download_rejects_tampered_bytes():
+    import hashlib
+    d = tempfile.TemporaryDirectory()
+    factory = CHUMA(Path(d.name) / "db.sqlite", Path(d.name) / "media")
+    owner = factory.owner()
+    character_id = factory.create_character(owner, "Integrity API")
+    artifact_id = "ART-INTEGRITY"
+    path = Path(d.name) / "media" / "artifact.bin"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(b"original")
+    now = int(__import__("time").time())
+    factory.store.db.execute(
+        "INSERT INTO artifacts VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+        (artifact_id, owner, character_id, None, None, "test", "application/octet-stream",
+         str(path), hashlib.sha256(b"original").hexdigest(), "test", "READY", now),
+    )
+    factory.store.commit()
+    path.write_bytes(b"tampered")
+    previous_factory, previous_token = API.factory, API.admin_token
+    API.factory, API.admin_token = factory, "secret"
+    server = HTTPServer(("127.0.0.1", 0), API)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        req = urllib.request.Request(
+            f"http://127.0.0.1:{server.server_port}/artifacts/{artifact_id}",
+            headers={"Authorization": "Bearer secret"},
+        )
+        try:
+            urllib.request.urlopen(req, timeout=5)
+            assert False, "tampered artifact was served"
+        except urllib.error.HTTPError as exc:
+            assert exc.code == 409
+            payload = json.loads(exc.read().decode())
+            assert payload["error"] == "artifact_integrity_failed"
+    finally:
+        server.shutdown(); server.server_close()
+        API.factory, API.admin_token = previous_factory, previous_token
+        factory.store.close(); d.cleanup()
+
 def test_character_controls_voice_and_random_dna():
     import tempfile
     d=tempfile.TemporaryDirectory()
