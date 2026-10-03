@@ -47,10 +47,30 @@ def test_http_health_and_auth_contract():
             base + "/owners",
             data=b"{}",
             method="POST",
-            headers={"Authorization": "Bearer test-admin-token", "Content-Type": "application/json", "X-Owner-ID": owner_id},
+            headers={"Authorization": "Bearer test-admin-token", "Content-Type": "application/json"},
         )
         with urllib.request.urlopen(owner_req, timeout=5) as r:
             owner_id=json.loads(r.read().decode())["owner_id"]
+
+        owners_req = urllib.request.Request(
+            base + "/owners",
+            headers={"Authorization": "Bearer test-admin-token", "X-Owner-ID": owner_id},
+        )
+        with urllib.request.urlopen(owners_req, timeout=5) as r:
+            owners_payload=json.loads(r.read().decode())
+            assert [o["owner_id"] for o in owners_payload["owners"]] == [owner_id]
+
+        try:
+            urllib.request.urlopen(
+                urllib.request.Request(
+                    base + "/owners",
+                    headers={"Authorization": "Bearer test-admin-token"},
+                ),
+                timeout=5,
+            )
+            assert False, "owner listing accepted without owner scope"
+        except urllib.error.HTTPError as e:
+            assert e.code == 403
         char_req = urllib.request.Request(
             base + "/characters",
             data=json.dumps({"owner_id":owner_id,"name":"Queue API"}).encode(),
@@ -96,6 +116,44 @@ def test_http_health_and_auth_contract():
         factory.store.close()
         d.cleanup()
 
+
+
+def test_owner_listing_is_scoped_to_request_owner():
+    d = tempfile.TemporaryDirectory()
+    factory = CHUMA(Path(d.name) / "db.sqlite", Path(d.name) / "media")
+    owner = factory.owner()
+    other = factory.owner()
+    factory.create_character(owner, "Private")
+    factory.create_character(other, "Other")
+    previous_factory, previous_token = API.factory, API.admin_token
+    API.factory, API.admin_token = factory, "secret"
+    server = HTTPServer(("127.0.0.1", 0), API)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        req = urllib.request.Request(
+            f"http://127.0.0.1:{server.server_port}/owners",
+            headers={"Authorization": "Bearer secret", "X-Owner-ID": owner},
+        )
+        with urllib.request.urlopen(req, timeout=5) as response:
+            payload = json.loads(response.read().decode())
+            assert [item["owner_id"] for item in payload["owners"]] == [owner]
+            assert payload["owners"][0]["characters"][0]["name"] == "Private"
+
+        try:
+            urllib.request.urlopen(
+                urllib.request.Request(
+                    f"http://127.0.0.1:{server.server_port}/owners",
+                    headers={"Authorization": "Bearer secret"},
+                ),
+                timeout=5,
+            )
+            assert False, "owner listing accepted without owner scope"
+        except urllib.error.HTTPError as exc:
+            assert exc.code == 403
+    finally:
+        server.shutdown(); server.server_close()
+        API.factory, API.admin_token = previous_factory, previous_token
+        factory.store.close(); d.cleanup()
 
 
 def test_artifact_download_rejects_tampered_bytes():
