@@ -437,3 +437,30 @@ def test_video_job_listing_is_scoped_to_owner():
         server.shutdown(); server.server_close()
         API.factory, API.admin_token, API.video_combain = previous_factory, previous_token, previous_video
         factory.store.close(); d.cleanup()
+
+
+
+def test_video_status_is_safe_to_expose():
+    d = tempfile.TemporaryDirectory()
+    factory = CHUMA(Path(d.name) / "db.sqlite", Path(d.name) / "media")
+    previous_factory, previous_token, previous_video = API.factory, API.admin_token, getattr(API, "video_combain", None)
+    from chuma_ip_factory.video_combain import VideoCombain
+    API.factory, API.admin_token, API.video_combain = factory, "secret", VideoCombain(factory)
+    server = HTTPServer(("127.0.0.1", 0), API)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        req = urllib.request.Request(
+            f"http://127.0.0.1:{server.server_port}/video/status",
+            headers={"Authorization": "Bearer secret"},
+        )
+        with urllib.request.urlopen(req, timeout=5) as response:
+            payload = json.loads(response.read().decode())
+            encoded = json.dumps(payload, ensure_ascii=False).lower()
+            assert "api_key" not in encoded
+            assert "endpoint" not in encoded
+            assert "authorization" not in encoded
+            assert payload["contract_version"] == 2
+    finally:
+        server.shutdown(); server.server_close()
+        API.factory, API.admin_token, API.video_combain = previous_factory, previous_token, previous_video
+        factory.store.close(); d.cleanup()
