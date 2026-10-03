@@ -137,6 +137,29 @@ def test_artifact_download_rejects_tampered_bytes():
         API.factory, API.admin_token = previous_factory, previous_token
         factory.store.close(); d.cleanup()
 
+def test_artifact_download_enforces_owner_scope():
+    import hashlib
+    d = tempfile.TemporaryDirectory()
+    factory = CHUMA(Path(d.name) / "db.sqlite", Path(d.name) / "media")
+    owner = factory.owner(); other = factory.owner()
+    cid = factory.create_character(owner, "Scoped API")
+    aid = "ART-SCOPE"; path = Path(d.name) / "media" / "scope.bin"; path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(b"private")
+    factory.store.db.execute("INSERT INTO artifacts VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+        (aid, owner, cid, None, None, "test", "application/octet-stream", str(path), hashlib.sha256(b"private").hexdigest(), "test", "READY", int(__import__("time").time())))
+    factory.store.commit()
+    previous_factory, previous_token = API.factory, API.admin_token; API.factory, API.admin_token = factory, "secret"
+    server = HTTPServer(("127.0.0.1", 0), API); threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        req = urllib.request.Request(f"http://127.0.0.1:{server.server_port}/artifacts/{aid}", headers={"Authorization":"Bearer secret","X-Owner-ID":other})
+        try: urllib.request.urlopen(req, timeout=5); assert False, "cross-owner artifact was served"
+        except urllib.error.HTTPError as exc:
+            assert exc.code == 403
+            assert json.loads(exc.read().decode())["error"] == "artifact_forbidden"
+    finally:
+        server.shutdown(); server.server_close(); API.factory, API.admin_token = previous_factory, previous_token; factory.store.close(); d.cleanup()
+
+
 def test_character_controls_voice_and_random_dna():
     import tempfile
     d=tempfile.TemporaryDirectory()
