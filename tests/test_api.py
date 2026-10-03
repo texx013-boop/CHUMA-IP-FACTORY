@@ -485,3 +485,41 @@ def test_video_job_get_ignores_query_string_without_changing_identity():
         server.shutdown(); server.server_close()
         API.factory, API.admin_token, API.video_combain = previous_factory, previous_token, previous_video
         factory.store.close(); d.cleanup()
+
+def test_protected_diagnostics_require_authentication():
+    d = tempfile.TemporaryDirectory()
+    factory = CHUMA(Path(d.name) / "db.sqlite", Path(d.name) / "media")
+    previous_factory, previous_token = API.factory, API.admin_token
+    API.factory, API.admin_token = factory, "secret"
+    server = HTTPServer(("127.0.0.1", 0), API)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{server.server_port}"
+    try:
+        for path in ("/config", "/budget", "/video/status", "/provider"):
+            try:
+                urllib.request.urlopen(base + path, timeout=5)
+                assert False, f"{path} accepted unauthenticated request"
+            except urllib.error.HTTPError as exc:
+                assert exc.code == 401
+
+        req = urllib.request.Request(
+            base + "/config",
+            headers={"Authorization": "Bearer secret"},
+        )
+        with urllib.request.urlopen(req, timeout=5) as response:
+            payload = json.loads(response.read().decode())
+            assert payload["auth_required"] is True
+            assert "admin_token" not in json.dumps(payload).lower()
+
+        req = urllib.request.Request(
+            base + "/budget",
+            headers={"Authorization": "Bearer secret"},
+        )
+        with urllib.request.urlopen(req, timeout=5) as response:
+            payload = json.loads(response.read().decode())
+            assert "api_key" not in json.dumps(payload).lower()
+            assert "authorization" not in json.dumps(payload).lower()
+    finally:
+        server.shutdown(); server.server_close()
+        API.factory, API.admin_token = previous_factory, previous_token
+        factory.store.close(); d.cleanup()
