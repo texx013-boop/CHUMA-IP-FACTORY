@@ -201,18 +201,19 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLower
         b=html.encode('utf-8'); self.send_response(200); self.send_header('Content-Type','text/html; charset=utf-8'); self.send_header('Cache-Control','no-store, no-cache, must-revalidate, max-age=0'); self.send_header('Pragma','no-cache'); self.send_header('Expires','0'); self.send_header('Content-Length',str(len(b))); self.end_headers(); self.wfile.write(b)
 
     def do_GET(self):
-        if self.path in ('/','/ui','/gallery'):
+        p = urllib.parse.urlsplit(self.path).path
+        if p in ('/','/ui','/gallery'):
             return self.send_html()
-        if self.path=='/health': return self.sendj(200,{'status':'ok','version':VERSION})
-        if self.path=='/ready':
+        if p=='/health': return self.sendj(200,{'status':'ok','version':VERSION})
+        if p=='/ready':
             try:
                 self.factory.store.one('SELECT 1')
                 return self.sendj(200,{'status':'ready','version':VERSION})
             except Exception as exc:
                 return self.sendj(503,{'status':'not_ready','error':type(exc).__name__})
-        if self.path.startswith('/artifacts/'):
+        if p.startswith('/artifacts/'):
             if not self.require_auth(): return
-            aid=self.path.split('/')[-1]
+            aid=p.split('/')[-1]
             row=self.factory.store.one('SELECT owner_id,storage_path,mime_type,content_hash AS digest FROM artifacts WHERE artifact_id=?',(aid,))
             if not row: return self.sendj(404,{'error':'artifact_not_found'})
             if not self.require_owner(row['owner_id']): return
@@ -226,10 +227,10 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLower
                 return self.sendj(409,{'error':'artifact_integrity_failed'})
             self.send_response(200); self.send_header('Content-Type',row['mime_type']); self.send_header('Cache-Control','no-store'); self.send_header('Content-Length',str(len(data))); self.end_headers(); self.wfile.write(data); return
         if not self.require_auth(): return
-        if self.path=='/config': return self.sendj(200,{'auth_required':bool(self.admin_token),'version':VERSION})
-        if self.path=='/budget': return self.sendj(200,self.budget_policy.describe())
-        if self.path=='/video/status': return self.sendj(200,self.video_combain.status())
-        if self.path.startswith('/video/jobs'):
+        if p=='/config': return self.sendj(200,{'auth_required':bool(self.admin_token),'version':VERSION})
+        if p=='/budget': return self.sendj(200,self.budget_policy.describe())
+        if p=='/video/status': return self.sendj(200,self.video_combain.status())
+        if p.startswith('/video/jobs'):
             parsed=urllib.parse.urlsplit(self.path)
             if parsed.path=='/video/jobs':
                 owner=self.request_owner()
@@ -243,14 +244,14 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLower
                     ):
                         return self.sendj(404,{'error':'character_not_found'})
                 return self.sendj(200,{'jobs':self.video_combain.list_jobs(owner, character_id)})
-        if urllib.parse.urlsplit(self.path).path.startswith('/video/jobs/'):
-            vid=urllib.parse.urlsplit(self.path).path.split('/')[3]
+        if p.startswith('/video/jobs/'):
+            vid=p.split('/')[3]
             job=self.video_combain.get_job(vid)
             if not job: return self.sendj(404,{'error':'video_job_not_found'})
             if not self.require_owner(job.get('owner_id')): return
             return self.sendj(200,job)
-        if self.path=='/provider': return self.sendj(200,self.factory.provider_status())
-        if self.path=='/owners':
+        if p=='/provider': return self.sendj(200,self.factory.provider_status())
+        if p=='/owners':
             requested=self.request_owner()
             if not requested:
                 return self.sendj(403,{'error':'owner_forbidden'})
@@ -266,18 +267,18 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLower
                 'created_at':owner_row['created_at'],
                 'characters':[dict(c) for c in chars],
             }]})
-        if self.path.startswith('/status/'):
-            owner=self.path.split('/')[-1]
+        if p.startswith('/status/'):
+            owner=p.split('/')[-1]
             if not self.require_owner(owner): return
             return self.sendj(200,self.factory.status(owner))
-        if self.path.startswith('/characters/') and self.path.endswith('/profile'):
-            cid=self.path.split('/')[2]
+        if p.startswith('/characters/') and p.endswith('/profile'):
+            cid=p.split('/')[2]
             target=self.factory.store.one('SELECT owner_id FROM characters WHERE character_id=?',(cid,))
             if not target: return self.sendj(404,{'error':'character_not_found'})
             if not self.require_owner(target['owner_id']): return
             return self.sendj(200,self.factory.character_profile(target['owner_id'],cid))
-        if self.path.startswith('/jobs/'):
-            job=self.factory.get_job(self.path.split('/')[-1])
+        if p.startswith('/jobs/'):
+            job=self.factory.get_job(p.split('/')[-1])
             if not job: return self.sendj(404,{'error':'job_not_found'})
             if not self.require_owner(job.get('owner_id')): return
             return self.sendj(200,job)
@@ -286,7 +287,7 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLower
         if not self.require_auth(): return
         try:
             n=int(self.headers.get('Content-Length','0'))
-            p=self.path; f=self.factory
+            p=urllib.parse.urlsplit(self.path).path; f=self.factory
             if p.startswith('/characters/') and p.endswith('/voice'):
                 if n<1 or n>25*1024*1024:
                     if n>25*1024*1024: self.rfile.read(25*1024*1024+1)
