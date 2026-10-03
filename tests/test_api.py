@@ -297,3 +297,29 @@ def test_api_binary_reference_and_voice_require_owner_scope():
         server.shutdown(); server.server_close()
         API.factory, API.admin_token = previous_factory, previous_token
         factory.store.close(); d.cleanup()
+
+
+def test_api_character_profile_requires_matching_owner_scope():
+    d = tempfile.TemporaryDirectory()
+    factory = CHUMA(Path(d.name) / "db.sqlite", Path(d.name) / "media")
+    owner = factory.owner(); other = factory.owner()
+    cid = factory.create_character(owner, "Private Profile")
+    previous_factory, previous_token = API.factory, API.admin_token
+    API.factory, API.admin_token = factory, "secret"
+    server = HTTPServer(("127.0.0.1", 0), API)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        req = urllib.request.Request(
+            f"http://127.0.0.1:{server.server_port}/characters/{cid}/profile",
+            headers={"Authorization": "Bearer secret", "X-Owner-ID": other},
+        )
+        try:
+            urllib.request.urlopen(req, timeout=5)
+            assert False, "cross-owner character profile was exposed"
+        except urllib.error.HTTPError as exc:
+            assert exc.code == 400
+            assert json.loads(exc.read().decode())["error"] == "AuthorizationError"
+    finally:
+        server.shutdown(); server.server_close()
+        API.factory, API.admin_token = previous_factory, previous_token
+        factory.store.close(); d.cleanup()
