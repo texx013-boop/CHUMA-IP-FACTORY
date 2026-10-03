@@ -6,6 +6,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 COPY . /app
 RUN pip install --no-cache-dir 'psycopg[binary]>=3.2,<4' \
-    && pip install --no-cache-dir .
+    && pip install --no-cache-dir . \
+    && useradd --create-home --uid 10001 --shell /usr/sbin/nologin chuma \
+    && mkdir -p /data \
+    && chown -R chuma:chuma /app /data
+USER chuma
 EXPOSE 8097
 CMD ["python", "run.py"]
