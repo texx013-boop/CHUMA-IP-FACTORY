@@ -11,7 +11,7 @@ from dataclasses import dataclass, asdict
 from pathlib import Path
 from typing import Any, Optional
 
-VERSION='2.5.7'
+VERSION='2.5.8'
 SCHEMA_VERSION=10
 
 class CHUMAError(Exception): pass
