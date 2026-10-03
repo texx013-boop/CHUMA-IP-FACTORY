@@ -182,11 +182,35 @@ class VideoCombain:
                               (character_id, owner_id)):
             raise ValueError("character_not_found")
         self._selected_engine(engine)
+        if source_content_id:
+            content_row = self.store.one(
+                "SELECT character_id FROM content WHERE content_id=? AND owner_id=?",
+                (source_content_id, owner_id),
+            )
+            if not content_row or content_row["character_id"] != character_id:
+                raise ValueError("content_not_found")
+        asset_ids = list(source_asset_ids or [])
+        if asset_ids:
+            placeholders = ",".join("?" for _ in asset_ids)
+            rows = self.store.q(
+                f"SELECT artifact_id,owner_id,character_id,content_id,status FROM artifacts "
+                f"WHERE artifact_id IN ({placeholders})",
+                tuple(asset_ids),
+            )
+            by_id = {r["artifact_id"]: r for r in rows}
+            if len(by_id) != len(set(asset_ids)):
+                raise ValueError("source_asset_not_found")
+            for aid in asset_ids:
+                r = by_id[aid]
+                if r["owner_id"] != owner_id or r["character_id"] != character_id or r["status"] != "READY":
+                    raise ValueError("source_asset_forbidden")
+                if source_content_id and r["content_id"] != source_content_id:
+                    raise ValueError("source_asset_mismatch")
         job_id = _uid("VJOB")
         now = int(time.time())
         payload = {"format": "9:16", "duration_seconds": 8, "fps": 24,
                    "style": "character-consistent", "source_content_id": source_content_id,
-                   "source_asset_ids": source_asset_ids or [], **(brief or {})}
+                   "source_asset_ids": asset_ids, **(brief or {})}
         brief_json = json.dumps(payload, ensure_ascii=False, sort_keys=True)
         # Image-content jobs are idempotent: repeated factory triggers reuse the
         # active/successful job for the same source, engine and rendering brief.
@@ -204,7 +228,7 @@ class VideoCombain:
         self.store.db.execute(
             "INSERT INTO video_jobs VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
             (job_id, owner_id, character_id, source_content_id,
-             json.dumps(source_asset_ids or [], ensure_ascii=False),
+             json.dumps(asset_ids, ensure_ascii=False),
              brief_json, engine, "QUEUED", None, None, now, now))
         self.store.commit()
         return self.get_job(job_id)
