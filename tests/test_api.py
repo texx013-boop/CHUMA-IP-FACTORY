@@ -412,7 +412,7 @@ def test_video_job_listing_is_scoped_to_owner():
     factory = CHUMA(Path(d.name) / "db.sqlite", Path(d.name) / "media")
     owner = factory.owner(); other = factory.owner()
     cid = factory.create_character(owner, "Video Scoped")
-    job = factory.video_combain.create_job(owner, cid)
+    job = VideoCombain(factory).create_job(owner, cid)
     previous_factory, previous_token, previous_video = API.factory, API.admin_token, getattr(API, 'video_combain', None)
     from chuma_ip_factory.video_combain import VideoCombain
     API.factory, API.admin_token, API.video_combain = factory, "secret", VideoCombain(factory)
