@@ -295,3 +295,28 @@ def test_video_combain_idempotency_uses_source_content_and_brief():
     assert a["video_job_id"] != c["video_job_id"]
     factory.store.close()
     d.cleanup()
+
+
+def test_video_combain_artifact_is_atomically_written_and_has_expected_digest():
+    import hashlib
+
+    d = tempfile.TemporaryDirectory()
+    factory = CHUMA(Path(d.name) / "db.sqlite", Path(d.name) / "media")
+    owner = factory.owner()
+    character_id = factory.create_character(owner, "Atomic Video")
+    video = VideoCombain(factory)
+
+    job = video.create_job(owner, character_id, brief={"hook": "atomic"})
+    done = video.run_job(job["video_job_id"])
+    artifact = factory.store.one(
+        "SELECT path,digest,status FROM artifacts WHERE artifact_id=?",
+        (done["output_artifact_id"],),
+    )
+    output = Path(artifact["path"])
+    assert artifact["status"] == "READY"
+    assert output.exists()
+    assert not output.with_suffix(output.suffix + ".tmp").exists()
+    assert artifact["digest"] == hashlib.sha256(output.read_bytes()).hexdigest()
+
+    factory.store.close()
+    d.cleanup()
