@@ -13,8 +13,6 @@ services:
       mountPath: /data
       sizeGB: 10
     envVars:
-      - key: PORT
-        value: "8097"
       - key: CHUMA_HOST
         value: "0.0.0.0"
       - key: CHUMA_DATA_DIR
