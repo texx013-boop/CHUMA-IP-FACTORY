@@ -335,8 +335,9 @@ def worker_loop(factory,stop_event):
             time.sleep(1)
         stop_event.wait(1)
 
-def run(host='127.0.0.1',port=8097,db='runtime/chuma.db',asset_root='runtime/media',image_provider=None,budget_policy=None):
-    f=CHUMA(db,asset_root=asset_root,image_provider=image_provider); API.factory=f; API.video_combain=VideoCombain(f); API.budget_policy=budget_policy or BudgetPolicy()
+def run(host='127.0.0.1',port=8097,db='runtime/chuma.db',asset_root='runtime/media',image_provider=None,budget_policy=None,video_engine=None):
+    policy=budget_policy or BudgetPolicy()
+    f=CHUMA(db,asset_root=asset_root,image_provider=image_provider); API.factory=f; API.video_combain=VideoCombain(f,video_engine=video_engine,budget_policy=policy); API.budget_policy=policy
     # Autonomous first-run bootstrap is best-effort: it must never prevent the
     # HTTP service from starting. A persistent marker makes the bootstrap idempotent.
     if os.getenv('CHUMA_AUTOSTART', 'true').strip().lower() not in ('0','false','no','off'):
