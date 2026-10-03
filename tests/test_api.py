@@ -333,7 +333,6 @@ def test_video_job_get_and_run_require_matching_owner_scope():
     cid = factory.create_character(owner, "Private Video Job")
     job = VideoCombain(factory).create_job(owner, cid)
     previous_factory, previous_token, previous_video = API.factory, API.admin_token, getattr(API, 'video_combain', None)
-    from chuma_ip_factory.video_combain import VideoCombain
     API.factory, API.admin_token, API.video_combain = factory, "secret", VideoCombain(factory)
     server = HTTPServer(("127.0.0.1", 0), API)
     threading.Thread(target=server.serve_forever, daemon=True).start()
@@ -376,7 +375,7 @@ def test_video_job_listing_supports_owner_scoped_character_filter():
     owner = factory.owner(); other = factory.owner()
     cid = factory.create_character(owner, "Filter A")
     other_cid = factory.create_character(other, "Filter B")
-    job = factory.video_combain.create_job(owner, cid)
+    job = VideoCombain(factory).create_job(owner, cid)
     previous_factory, previous_token, previous_video = API.factory, API.admin_token, getattr(API, 'video_combain', None)
     from chuma_ip_factory.video_combain import VideoCombain
     API.factory, API.admin_token, API.video_combain = factory, "secret", VideoCombain(factory)
