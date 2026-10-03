@@ -215,7 +215,7 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLower
         if self.path.startswith('/artifacts/'):
             if not self.require_auth(): return
             aid=self.path.split('/')[-1]
-            row=self.factory.store.one('SELECT owner_id,storage_path,mime_type,digest FROM artifacts WHERE artifact_id=?',(aid,))
+            row=self.factory.store.one('SELECT owner_id,storage_path,mime_type,content_hash AS digest FROM artifacts WHERE artifact_id=?',(aid,))
             if not row: return self.sendj(404,{'error':'artifact_not_found'})
             if not self.require_owner(row['owner_id']): return
             p=Path(row['storage_path']).resolve()
