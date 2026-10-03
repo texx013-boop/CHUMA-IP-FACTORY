@@ -325,6 +325,44 @@ def test_api_character_profile_requires_matching_owner_scope():
         factory.store.close(); d.cleanup()
 
 
+def test_video_job_listing_supports_owner_scoped_character_filter():
+    d = tempfile.TemporaryDirectory()
+    factory = CHUMA(Path(d.name) / "db.sqlite", Path(d.name) / "media")
+    owner = factory.owner(); other = factory.owner()
+    cid = factory.create_character(owner, "Filter A")
+    other_cid = factory.create_character(other, "Filter B")
+    job = factory.video_combain.create_job(owner, cid)
+    previous_factory, previous_token, previous_video = API.factory, API.admin_token, getattr(API, 'video_combain', None)
+    from chuma_ip_factory.video_combain import VideoCombain
+    API.factory, API.admin_token, API.video_combain = factory, "secret", VideoCombain(factory)
+    server = HTTPServer(("127.0.0.1", 0), API)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        base = f"http://127.0.0.1:{server.server_port}"
+        req = urllib.request.Request(
+            f"{base}/video/jobs?character_id={cid}",
+            headers={"Authorization":"Bearer secret","X-Owner-ID":owner},
+        )
+        with urllib.request.urlopen(req, timeout=5) as response:
+            payload = json.loads(response.read().decode())
+            assert [item["video_job_id"] for item in payload["jobs"]] == [job["video_job_id"]]
+
+        req = urllib.request.Request(
+            f"{base}/video/jobs?character_id={other_cid}",
+            headers={"Authorization":"Bearer secret","X-Owner-ID":owner},
+        )
+        try:
+            urllib.request.urlopen(req, timeout=5)
+            assert False, "foreign character filter was accepted"
+        except urllib.error.HTTPError as exc:
+            assert exc.code == 404
+            assert json.loads(exc.read().decode())["error"] == "character_not_found"
+    finally:
+        server.shutdown(); server.server_close()
+        API.factory, API.admin_token, API.video_combain = previous_factory, previous_token, previous_video
+        factory.store.close(); d.cleanup()
+
+
 def test_video_job_listing_is_scoped_to_owner():
     d = tempfile.TemporaryDirectory()
     factory = CHUMA(Path(d.name) / "db.sqlite", Path(d.name) / "media")
