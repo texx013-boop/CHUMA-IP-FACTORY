@@ -109,3 +109,12 @@ def test_character_controls_voice_and_random_dna():
     assert random['card']['dna_mode']=='RANDOMIZED'
     assert len(random['card']['user_controls']['random_dna'])==5
     factory.store.close(); d.cleanup()
+
+
+def test_user_voice_reference_is_persisted():
+    import tempfile
+    d=tempfile.TemporaryDirectory(); factory=CHUMA(Path(d.name)/'db.sqlite',Path(d.name)/'media'); owner=factory.owner(); cid=factory.create_character(owner,'Voice Test')
+    r=factory.attach_voice(owner,cid,b'RIFF-test','audio/wav','my-voice.wav')
+    p=factory.character_profile(owner,cid)
+    assert p['card']['voice_profile']['source']=='user'; assert p['card']['voice_profile']['asset_id']==r['asset_id']
+    factory.store.close(); d.cleanup()
