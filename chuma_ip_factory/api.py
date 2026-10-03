@@ -228,21 +228,35 @@ def recover_exhausted_reference_jobs(factory):
             if not failed:
                 continue
             ref_char=factory.store.one(
-                "SELECT character_id FROM characters WHERE owner_id=? "
-                "AND card_json LIKE '%reference_asset_id%' ORDER BY updated_at DESC LIMIT 1", (owner_id,)
+                "SELECT a.character_id FROM artifacts a "
+                "WHERE a.owner_id=? AND a.variant='reference' "
+                "ORDER BY a.created_at DESC LIMIT 1", (owner_id,)
             )
             if not ref_char:
                 continue
             key=f"server-recovery-402-{failed['job_id']}"
-            factory.enqueue_job(owner_id,'AUTONOMOUS_CYCLE',
-                {'character_id':ref_char['character_id'],'platform':'local-test','max_attempts':3},key)
+            factory.enqueue_job(
+                owner_id,
+                'AUTONOMOUS_CYCLE',
+                {'character_id':ref_char['character_id'],'platform':'local-test','max_attempts':3},
+                key,
+            )
     except Exception as exc:
         print(f"CHUMA recovery scan deferred: {type(exc).__name__}: {exc}", flush=True)
 
 def worker_loop(factory,stop_event):
+    last_recovery=0
     while not stop_event.is_set():
         try:
-            row=factory.store.one("SELECT job_id FROM jobs WHERE status='QUEUED' AND next_run_at<=? ORDER BY created_at LIMIT 1",(int(time.time()),))
+            now_ts=int(time.time())
+            if now_ts-last_recovery >= 10:
+                recover_exhausted_reference_jobs(factory)
+                last_recovery=now_ts
+            row=factory.store.one(
+                "SELECT job_id FROM jobs WHERE status='QUEUED' AND next_run_at<=? "
+                "ORDER BY created_at LIMIT 1",
+                (now_ts,),
+            )
             if row:
                 factory.run_job(row['job_id'])
                 continue
