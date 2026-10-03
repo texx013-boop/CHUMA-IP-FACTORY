@@ -16,6 +16,7 @@ def test_video_combain_manifest_job_and_provenance():
     factory.initialize_character(owner, character_id)
     content_id = factory.create_content(owner, character_id)
     factory.qc(owner, content_id)
+    factory.produce_variants(owner, content_id)
     artifacts = factory.store.q("SELECT artifact_id FROM artifacts WHERE owner_id=? AND content_id=? AND status='READY'", (owner, content_id))
     assert artifacts
     video = VideoCombain(factory)
@@ -219,7 +220,7 @@ def test_video_http_download_output_limit():
             return self
         def __exit__(self, exc_type, exc, tb):
             return False
-        def read(self):
+        def read(self, size=-1):
             return __import__("json").dumps(payload).encode()
 
     with patch.object(module.urllib.request, "urlopen", side_effect=[ApiResponse(), Response()]):
