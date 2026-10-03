@@ -337,14 +337,14 @@ def test_video_combain_artifact_is_atomically_written_and_has_expected_digest():
     job = video.create_job(owner, character_id, brief={"hook": "atomic"})
     done = video.run_job(job["video_job_id"])
     artifact = factory.store.one(
-        "SELECT path,digest,status FROM artifacts WHERE artifact_id=?",
+        "SELECT storage_path,content_hash,status FROM artifacts WHERE artifact_id=?",
         (done["output_artifact_id"],),
     )
-    output = Path(artifact["path"])
+    output = Path(artifact["storage_path"])
     assert artifact["status"] == "READY"
     assert output.exists()
     assert not output.with_suffix(output.suffix + ".tmp").exists()
-    assert artifact["digest"] == hashlib.sha256(output.read_bytes()).hexdigest()
+    assert artifact["content_hash"] == hashlib.sha256(output.read_bytes()).hexdigest()
 
     factory.store.close()
     d.cleanup()
