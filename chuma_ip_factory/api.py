@@ -93,6 +93,19 @@ def worker_loop(factory,stop_event):
 
 def run(host='127.0.0.1',port=8097,db='runtime/chuma.db',asset_root='runtime/media',image_provider=None,budget_policy=None):
     f=CHUMA(db,asset_root=asset_root,image_provider=image_provider); API.factory=f; API.budget_policy=budget_policy or BudgetPolicy()
+    # Autonomous first-run bootstrap: when the database is empty, create the first
+    # CHUMA character and enqueue exactly one full cycle. This is idempotent via
+    # the persistent meta table, so restarts do not create duplicate generations.
+    if os.getenv('CHUMA_AUTOSTART', 'true').strip().lower() not in ('0','false','no','off'):
+        marker=f.store.one("SELECT v FROM meta WHERE k='autostart_v1'")
+        if not marker:
+            owner_row=f.store.one("SELECT owner_id FROM owners ORDER BY created_at LIMIT 1")
+            owner_id=owner_row['owner_id'] if owner_row else f.owner()
+            char_row=f.store.one("SELECT character_id FROM characters WHERE owner_id=? ORDER BY created_at LIMIT 1",(owner_id,))
+            character_id=char_row['character_id'] if char_row else f.create_character(owner_id,'CHUMA',{'description':'Autonomous image-first seed character'})
+            f.enqueue_job(owner_id,'AUTONOMOUS_CYCLE',{'character_id':character_id,'platform':'local-test','max_attempts':3},'autostart-v1')
+            f.store.db.execute("INSERT INTO meta(k,v) VALUES('autostart_v1',?)",('queued',))
+            f.store.commit()
     stop_event=threading.Event()
     threading.Thread(target=worker_loop,args=(f,stop_event),daemon=True,name='chuma-worker').start()
     try:
