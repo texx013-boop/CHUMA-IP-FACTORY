@@ -241,7 +241,13 @@ class VideoCombain:
             ext = "json" if kind == "manifest" else "mp4"
             artifact_id = _uid("VA")
             path = self.root / f"{video_job_id}.{ext}"
-            path.write_bytes(data)
+            tmp_path = path.with_suffix(path.suffix + ".tmp")
+            try:
+                tmp_path.write_bytes(data)
+                tmp_path.replace(path)
+            finally:
+                if tmp_path.exists():
+                    tmp_path.unlink()
             digest = hashlib.sha256(data).hexdigest()
             self.store.db.execute(
                 "INSERT INTO artifacts VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
