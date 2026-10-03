@@ -16,6 +16,8 @@ def test_video_combain_manifest_job_and_provenance():
     factory.initialize_character(owner, character_id)
     content_id = factory.create_content(owner, character_id)
     factory.qc(owner, content_id)
+
+    factory.produce_variants(owner, content_id)
     factory.produce_variants(owner, content_id)
     artifacts = factory.store.q("SELECT artifact_id FROM artifacts WHERE owner_id=? AND content_id=? AND status='READY'", (owner, content_id))
     assert artifacts
@@ -45,7 +47,7 @@ def test_video_combain_manifest_job_and_provenance():
     )
     assert artifact["owner_id"] == owner
     assert artifact["character_id"] == character_id
-    assert artifact["content_id"] == "CONTENT-1"
+    assert artifact["content_id"] == content_id
     assert artifact["provider"] == "test-manifest"
     assert artifact["variant"] == "video-manifest"
 
@@ -238,7 +240,7 @@ def test_video_http_base64_output_limit():
     class ApiResponse:
         def __enter__(self): return self
         def __exit__(self, exc_type, exc, tb): return False
-        def read(self):
+        def read(self, size=-1):
             return __import__("json").dumps({"video_base64": "x" * 1000}).encode()
 
     engine = HTTPVideoEngine("https://example.invalid", "token", max_output_bytes=16)
@@ -279,6 +281,8 @@ def test_video_combain_jobs_survive_restart():
     factory.initialize_character(owner, character_id)
     content_id = factory.create_content(owner, character_id)
     factory.qc(owner, content_id)
+
+    factory.produce_variants(owner, content_id)
     artifacts = factory.store.q("SELECT artifact_id FROM artifacts WHERE owner_id=? AND content_id=? AND status='READY'", (owner, content_id))
     assert artifacts
     video = VideoCombain(factory)
@@ -318,6 +322,8 @@ def test_video_combain_idempotency_uses_source_content_and_brief():
     factory.initialize_character(owner, character_id)
     content_id = factory.create_content(owner, character_id)
     factory.qc(owner, content_id)
+
+    factory.produce_variants(owner, content_id)
     video = VideoCombain(factory)
     a = video.create_job_from_content(owner, content_id, {"hook": "same"})
     b = video.create_job_from_content(owner, content_id, {"hook": "same"})
@@ -359,6 +365,8 @@ def test_video_combain_revalidates_provenance_before_render():
     factory.initialize_character(owner, character_id)
     content_id = factory.create_content(owner, character_id)
     factory.qc(owner, content_id)
+
+    factory.produce_variants(owner, content_id)
     artifact = factory.store.one(
         "SELECT artifact_id FROM artifacts WHERE owner_id=? AND content_id=? AND status='READY' LIMIT 1",
         (owner, content_id),
@@ -399,6 +407,8 @@ def test_video_combain_rejects_tampered_source_artifact_before_render():
     factory.initialize_character(owner, character_id)
     content_id = factory.create_content(owner, character_id)
     factory.qc(owner, content_id)
+
+    factory.produce_variants(owner, content_id)
     artifact = factory.store.one(
         "SELECT artifact_id,storage_path,content_hash FROM artifacts "
         "WHERE owner_id=? AND content_id=? AND status='READY' LIMIT 1",
@@ -436,6 +446,8 @@ def test_video_combain_rejects_foreign_provenance_inputs():
     factory.initialize_character(owner, cid)
     content_id = factory.create_content(owner, cid)
     factory.qc(owner, content_id)
+
+    factory.produce_variants(owner, content_id)
     artifact = factory.store.one("SELECT artifact_id FROM artifacts WHERE owner_id=? AND content_id=? AND status='READY' LIMIT 1", (owner, content_id))
     try:
         VideoCombain(factory).create_job(other, other_cid, source_content_id=content_id, source_asset_ids=[artifact["artifact_id"]])
@@ -455,6 +467,8 @@ def test_video_combain_rejects_missing_source_artifact_file_before_render():
     factory.initialize_character(owner, character_id)
     content_id = factory.create_content(owner, character_id)
     factory.qc(owner, content_id)
+
+    factory.produce_variants(owner, content_id)
     artifact = factory.store.one(
         "SELECT artifact_id,storage_path FROM artifacts WHERE owner_id=? AND content_id=? AND status='READY' LIMIT 1",
         (owner, content_id),
@@ -482,6 +496,8 @@ def test_video_combain_rejects_mutated_source_content_before_render():
     factory.initialize_character(owner, character_id)
     content_id = factory.create_content(owner, character_id)
     factory.qc(owner, content_id)
+
+    factory.produce_variants(owner, content_id)
     artifact = factory.store.one(
         "SELECT artifact_id FROM artifacts WHERE owner_id=? AND content_id=? AND status='READY' LIMIT 1",
         (owner, content_id),
