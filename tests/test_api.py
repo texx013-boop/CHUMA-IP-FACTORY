@@ -523,3 +523,47 @@ def test_protected_diagnostics_require_authentication():
         server.shutdown(); server.server_close()
         API.factory, API.admin_token = previous_factory, previous_token
         factory.store.close(); d.cleanup()
+
+
+def test_api_rejects_invalid_json_without_internal_error_details():
+    d = tempfile.TemporaryDirectory()
+    factory = CHUMA(Path(d.name) / "db.sqlite", Path(d.name) / "media")
+    previous_factory, previous_token = API.factory, API.admin_token
+    API.factory, API.admin_token = factory, "secret"
+    server = HTTPServer(("127.0.0.1", 0), API)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        req = urllib.request.Request(
+            f"http://127.0.0.1:{server.server_port}/cycle",
+            data=b"{not-json", method="POST",
+            headers={"Authorization":"Bearer secret","Content-Type":"application/json"},
+        )
+        try:
+            urllib.request.urlopen(req, timeout=5)
+            assert False, "invalid JSON was accepted"
+        except urllib.error.HTTPError as exc:
+            assert exc.code == 400
+            payload = json.loads(exc.read().decode())
+            assert payload == {"error":"invalid_json"}
+            assert "traceback" not in json.dumps(payload).lower()
+    finally:
+        server.shutdown(); server.server_close()
+        API.factory, API.admin_token = previous_factory, previous_token
+        factory.store.close(); d.cleanup()
+
+
+def test_public_readiness_endpoints_remain_public():
+    d = tempfile.TemporaryDirectory()
+    factory = CHUMA(Path(d.name) / "db.sqlite", Path(d.name) / "media")
+    previous_factory, previous_token = API.factory, API.admin_token
+    API.factory, API.admin_token = factory, "secret"
+    server = HTTPServer(("127.0.0.1", 0), API)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        for path in ("/health", "/ready"):
+            with urllib.request.urlopen(f"http://127.0.0.1:{server.server_port}{path}", timeout=5) as response:
+                assert response.status == 200
+    finally:
+        server.shutdown(); server.server_close()
+        API.factory, API.admin_token = previous_factory, previous_token
+        factory.store.close(); d.cleanup()
