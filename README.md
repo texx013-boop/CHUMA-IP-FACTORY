@@ -62,9 +62,9 @@ The system is designed to proceed autonomously after the user has configured the
 
 No secrets, runtime databases, media, credentials, or generated private artifacts belong in Git.
 
-## Deployment target
+## Deployment targets
 
-Railway cloud deployment, with provider-agnostic application contracts and external service authorization handled separately.
+Provider-agnostic Docker deployment. Railway remains supported as a fallback; Render production infrastructure is defined in `render.yaml`; a complete self-hosted PostgreSQL topology is defined in `docker-compose.yml`. Application contracts do not depend on a specific cloud provider.
 
 ## Verification rule
 
