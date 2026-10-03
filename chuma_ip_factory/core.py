@@ -11,7 +11,7 @@ from dataclasses import dataclass, asdict
 from pathlib import Path
 from typing import Any, Optional
 
-VERSION='2.5.6'
+VERSION='2.5.7'
 SCHEMA_VERSION=10
 
 class CHUMAError(Exception): pass
@@ -195,18 +195,34 @@ class CHUMA:
     def initialize_character(self,owner,cid):
         self._auth(owner); row=self.store.one('SELECT * FROM characters WHERE character_id=? AND owner_id=?',(cid,owner))
         if not row: raise AuthorizationError()
-        existing_assets=self.store.one('SELECT COUNT(*) n FROM assets WHERE owner_id=? AND character_id=?',(owner,cid))['n']
+        existing_assets=self.store.one("SELECT COUNT(*) n FROM assets WHERE owner_id=? AND character_id=? AND kind!='REFERENCE'",(owner,cid))['n']
         existing_experiments=self.store.one('SELECT COUNT(*) n FROM experiments WHERE owner_id=? AND character_id=?',(owner,cid))['n']
         if row['state'] == 'BIRTH':
             self.store.db.execute("UPDATE characters SET state='DISCOVERY',updated_at=?,version=version+1 WHERE character_id=?",(now(),cid)); self.store.commit(); self.store.event(owner,'CHARACTER_STATE_CHANGED','CHARACTER',cid,{'state':'DISCOVERY'})
         if existing_assets == 0:
-            for kind,meta in [('PORTRAIT',{'angle':'front'}),('PORTRAIT',{'angle':'three_quarter'}),('FULL_BODY',{'angle':'front'}),('EXPRESSION',{'type':'neutral'})]: self._generate_asset(owner,cid,kind,meta)
+            card=json.loads(row['card_json'] or '{}')
+            refs=self.store.q("SELECT asset_id,meta_json FROM assets WHERE owner_id=? AND character_id=? AND kind='REFERENCE' AND status='APPROVED' ORDER BY created_at DESC",(owner,cid))
+            brief={'character_id':cid,'character_name':row['name'],'mechanic':'identity_discovery','hook':'visual curiosity','format':'portrait_social','identity_lock':True,'character_dna':card,'reference_asset_ids':[r['asset_id'] for r in refs]}
+            for kind,meta in [('PORTRAIT',{'angle':'front'}),('PORTRAIT',{'angle':'three_quarter'}),('FULL_BODY',{'angle':'front'}),('EXPRESSION',{'type':'neutral'})]:
+                self._generate_asset(owner,cid,kind,meta,brief=brief)
         if existing_experiments == 0:
             for i in range(3): self.create_experiment(owner,cid,f'Which image mechanic produces stronger recognition signal #{i+1}', 'CHARACTER_RECOGNITION')
         current=self.store.one('SELECT state FROM characters WHERE character_id=? AND owner_id=?',(cid,owner))['state']
         return {'character_id':cid,'assets_created':max(0,4-existing_assets),'experiments_created':max(0,3-existing_experiments),'state':current}
     def _generate_asset(self,owner,cid,kind,meta,brief=None,content_id=None):
-        req={'character_id':cid,'kind':kind,'meta':meta,'brief':brief or {}}
+        brief=brief or {}
+        req={'character_id':cid,'kind':kind,'meta':meta,'brief':brief}
+        reference_ids=brief.get('reference_asset_ids') or []
+        if reference_ids:
+            ref=None
+            for reference_id in reference_ids:
+                ref=self.store.one("SELECT ar.storage_path,ar.mime_type FROM artifacts ar JOIN assets a ON a.asset_id=ar.asset_id WHERE ar.owner_id=? AND ar.character_id=? AND ar.asset_id=? AND a.kind='REFERENCE' AND a.status='APPROVED' ORDER BY ar.created_at DESC LIMIT 1",(owner,cid,reference_id))
+                if ref:
+                    break
+            if ref and Path(ref['storage_path']).exists():
+                req['reference_image_path']=str(ref['storage_path'])
+                req['reference_image_mime_type']=ref['mime_type']
+                req['reference_mode']='identity-preserving-image-to-image'
         run_id=uid('RUN')
         try:
             result=self.image_provider.generate(req)
@@ -244,8 +260,11 @@ class CHUMA:
         character_row=self.store.one('SELECT card_json FROM characters WHERE character_id=? AND owner_id=?',(cid,owner))
         dna=json.loads(character_row['card_json'] or '{}') if character_row else {}
         brief={'character_id':cid,'character_name':character['name'],'mechanic':idea.get('mechanic'),'hook':idea.get('hook'),'format':'portrait_social','identity_lock':True,'reuse_policy':'prefer_approved_assets','character_dna':dna,'reference_asset_ids':[a['asset_id'] for a in assets if json.loads(a.get('meta_json','{}') or '{}').get('role')=='character_reference']}
-        content_id=uid('CNT'); t=now(); chosen=[a['asset_id'] for a in assets[:2]]
-        if not chosen: chosen=[self._generate_asset(owner,cid,'TARGETED',{'reason':'content_gap'},brief=brief,content_id=content_id)]
+        content_id=uid('CNT'); t=now()
+        production_assets=[a for a in assets if json.loads(a.get('meta_json','{}') or '{}').get('role')!='character_reference']
+        chosen=[a['asset_id'] for a in production_assets[:2]]
+        if not chosen:
+            chosen=[self._generate_asset(owner,cid,'TARGETED',{'reason':'content_gap'},brief=brief,content_id=content_id)]
         brief_id=uid('BRF'); production={'mode':'ASSEMBLY','asset_ids':chosen,'variants':['1:1','4:5','9:16'],'brief_id':brief_id}
         prov={'character_id':cid,'asset_ids':chosen,'schema_version':SCHEMA_VERSION,'engine_version':VERSION,'provider':getattr(self.image_provider,'name','unknown')}
         self.store.db.execute('INSERT INTO content VALUES(?,?,?,?,?,?,?,?,?)',(content_id,owner,cid,json.dumps(idea), 'QC_PENDING',json.dumps(production),json.dumps(prov),t,t))
