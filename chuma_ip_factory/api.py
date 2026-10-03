@@ -175,7 +175,7 @@ function show(){if(owner){$("character").textContent="ID владельца: "+o
 async function j(url,opt={}){opt.headers=Object.assign({'Content-Type':'application/json'},opt.headers||{});if(owner)opt.headers['X-Owner-ID']=owner;const token=localStorage.chuma_token;if(token)opt.headers.Authorization='Bearer '+token;let r=await fetch(url,opt);let x=await r.json();if(r.status===401){localStorage.removeItem('chuma_token');throw new Error('Требуется токен доступа CHUMA.')}if(!r.ok)throw new Error(x.message||x.error||r.status);return x}
 let videoEngine='test-manifest'; async function videoStatus(){try{const x=await j('/video/status');const active=(x.engines||[]).find(e=>e.id==='external-api'&&e.connected);videoEngine=active?'external-api':'test-manifest';$('video-engines').innerHTML=(x.engines||[]).map(e=>'<div class="action"><strong>'+e.name+'</strong><span>'+e.description+' · '+(e.connected?'подключён':'готов к подключению')+'</span></div>').join('')}catch(e){$('video-engines').innerHTML='<div class="empty">'+e.message+'</div>'}}
 async function createVideoJob(){if(!owner||!character)return toast('Сначала создай персонажа','err');try{const x=await j('/video/jobs',{method:'POST',body:JSON.stringify({owner_id:owner,character_id:character,brief:{prompt:$('video-brief').value||'Character-consistent short video'},engine:videoEngine})});$('video-result').innerHTML='<pre>▶ Видеозадача создана · '+x.video_job_id+'</pre>';toast('Видеозадача создана');const done=await j('/video/jobs/'+x.video_job_id+'/run',{method:'POST',body:'{}'});$('video-result').innerHTML='<pre>'+JSON.stringify(done,null,2)+'</pre>'}catch(e){toast(e.message,'err')}}\nasync function createVideoFromLatest(){if(!owner||!character)return toast('Сначала создай персонажа','err');try{const x=await j('/video/from-latest-content',{method:'POST',body:JSON.stringify({owner_id:owner,character_id:character,brief:{prompt:$('video-brief').value||'Character-consistent short video from latest image content'},engine:videoEngine})});$('video-result').innerHTML='<pre>⚡ Видеозадача из image-контента · '+x.video_job_id+'</pre>';toast('Связка image → video создана');const done=await j('/video/jobs/'+x.video_job_id+'/run',{method:'POST',body:'{}'});$('video-result').innerHTML='<pre>'+JSON.stringify(done,null,2)+'</pre>'}catch(e){toast(e.message,'err')}}
-async function boot(){try{let cfg=await j('/config');if(cfg.auth_required&&!localStorage.chuma_token){let t=prompt('Введите токен доступа CHUMA:');if(t){localStorage.chuma_token=t.trim();}}let b=await j('/budget');let x=await j('/provider');$("provider").innerHTML='<span class="ok">ONLINE</span> · '+x.version+' · '+x.name+' · budget '+b.mode+(b.allow_paid?'':' · paid OFF');$("app-version").textContent=x.version;await hydrate()}catch(e){$("provider").textContent='Ошибка: '+e.message}}
+async function boot(){try{let cfg=await j('/config');if(cfg.auth_required&&!localStorage.chuma_token){let t=prompt('Введите токен доступа CHUMA:');if(t){localStorage.chuma_token=t.trim();}}if(!owner){let created=await j('/owners',{method:'POST',body:'{}'});owner=created.owner_id;localStorage.chuma_owner=owner}let b=await j('/budget');let x=await j('/provider');$("provider").innerHTML='<span class="ok">ONLINE</span> · '+x.version+' · '+x.name+' · budget '+b.mode+(b.allow_paid?'':' · paid OFF');$("app-version").textContent=x.version;await hydrate()}catch(e){$("provider").textContent='Ошибка: '+e.message}}
 async function quickStart(){try{if(!owner){let x=await j('/owners',{method:'POST',body:'{}'});owner=x.owner_id;localStorage.chuma_owner=owner}if(!character){let x=await j('/characters',{method:'POST',body:JSON.stringify({owner_id:owner,name:'CHUMA',card:{description:'Autonomous image-first seed character'}})});character=x.character_id;localStorage.chuma_character=character}$('metric-name').textContent=$('name').value||'CHUMA';show();toast('⚡ CHUMA готова к работе');await status();await gallery()}catch(e){toast(e.message,'err')}}
 function setToken(){const t=prompt('Токен доступа CHUMA:');if(t===null)return;localStorage.chuma_token=t.trim();location.reload()}
 function resetLocal(){localStorage.removeItem('chuma_token');localStorage.removeItem('chuma_owner');localStorage.removeItem('chuma_character');owner='';character='';location.reload()}
@@ -237,12 +237,21 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLower
             return self.sendj(200,job)
         if self.path=='/provider': return self.sendj(200,self.factory.provider_status())
         if self.path=='/owners':
-            owners=self.factory.store.q('SELECT owner_id,created_at FROM owners ORDER BY created_at DESC')
-            out=[]
-            for o in owners:
-                chars=self.factory.store.q('SELECT character_id,name,state,version FROM characters WHERE owner_id=? ORDER BY created_at',(o['owner_id'],))
-                out.append({'owner_id':o['owner_id'],'created_at':o['created_at'],'characters':[dict(c) for c in chars]})
-            return self.sendj(200,{'owners':out})
+            requested=self.request_owner()
+            if not requested:
+                return self.sendj(403,{'error':'owner_forbidden'})
+            owner_row=self.factory.store.one('SELECT owner_id,created_at FROM owners WHERE owner_id=?',(requested,))
+            if not owner_row:
+                return self.sendj(404,{'error':'owner_not_found'})
+            chars=self.factory.store.q(
+                'SELECT character_id,name,state,version FROM characters WHERE owner_id=? ORDER BY created_at',
+                (requested,),
+            )
+            return self.sendj(200,{'owners':[{
+                'owner_id':owner_row['owner_id'],
+                'created_at':owner_row['created_at'],
+                'characters':[dict(c) for c in chars],
+            }]})
         if self.path.startswith('/status/'):
             owner=self.path.split('/')[-1]
             if not self.require_owner(owner): return
