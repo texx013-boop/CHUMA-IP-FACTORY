@@ -225,7 +225,8 @@ def test_video_http_download_output_limit():
         def read(self, size=-1):
             return __import__("json").dumps(payload).encode()
 
-    with patch.object(module.urllib.request, "urlopen", side_effect=[ApiResponse(), Response()]):
+    with patch.object(module, "_validate_external_http_url", side_effect=lambda url: url), \
+         patch.object(module.urllib.request, "urlopen", side_effect=[ApiResponse(), Response()]):
         try:
             engine.render({"test": True})
             assert False, "oversized video output was accepted"
