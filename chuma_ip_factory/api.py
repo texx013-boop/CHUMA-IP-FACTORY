@@ -27,7 +27,119 @@ class API(BaseHTTPRequestHandler):
         for k,v in (extra or {}).items(): self.send_header(k,v)
         self.send_header('Content-Length',str(len(b))); self.end_headers(); self.wfile.write(b)
     def send_html(self):
-        html = r"""<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CHUMA IP FACTORY</title><style>body{font-family:system-ui,-apple-system,Segoe UI,sans-serif;max-width:900px;margin:40px auto;padding:0 20px;background:#111;color:#eee}h1{margin-bottom:4px}.muted{color:#aaa}.card{background:#1b1b1b;border:1px solid #333;border-radius:14px;padding:18px;margin:16px 0}input,textarea,button{font:inherit;padding:10px;border-radius:8px;border:1px solid #444;background:#222;color:#eee}input,textarea{width:100%;box-sizing:border-box;margin:6px 0 12px}button{cursor:pointer}button:hover{background:#2b2b2b}.row{display:grid;grid-template-columns:1fr 1fr;gap:14px}@media(max-width:700px){.row{grid-template-columns:1fr}}pre{white-space:pre-wrap;word-break:break-word;background:#0b0b0b;padding:12px;border-radius:8px}.ok{color:#8fda8f}.warn{color:#e7c66a}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-top:14px}.tile{background:#111;border:1px solid #333;border-radius:12px;padding:10px}.tile img{width:100%;height:220px;object-fit:cover;background:#000;border-radius:8px}.tile small{display:block;color:#aaa;margin-top:7px;word-break:break-word}</style></head><body><h1>CHUMA IP FACTORY</h1><div class="muted">Image Content Factory · пользовательский запуск · версия 2.5.6</div><div class="card"><div id="provider">Проверка ядра…</div><button onclick="createOwner()">Создать владельца</button> <button onclick="resetLocal()">Сбросить локальную сессию</button> <button onclick="setToken()">Токен доступа</button><div id="owner" class="muted"></div></div><div class="card"><h2>Персонаж</h2><input id="name" placeholder="Имя персонажа" value="CHUMA"><textarea id="card" rows=3 placeholder="Краткая карточка персонажа (необязательно)"></textarea><button onclick="createCharacter()">Создать персонажа</button><div id="character" class="muted"></div><div style="margin-top:12px"><input id="reference" type="file" accept="image/jpeg,image/png,image/webp"><button onclick="uploadReference()">Загрузить референс</button><div id="reference_status" class="muted"></div></div></div><div class="card"><h2>Автономный цикл</h2><button onclick="cycle()">Запустить цикл</button><div id="result"></div></div><div class="card"><h2>Визуальный результат</h2><button onclick="gallery()">Показать изображения</button><div id="gallery" class="grid"></div></div><div class="card"><h2>Состояние</h2><button onclick="status()">Обновить</button><pre id="status">—</pre></div><script>const $=id=>document.getElementById(id);let owner=localStorage.chuma_owner||'',character=localStorage.chuma_character||'';function show(){if(owner)$("owner").textContent="Owner: "+owner;if(character)$("character").textContent="Character: "+character;}async function j(url,opt={}){opt.headers=Object.assign({'Content-Type':'application/json'},opt.headers||{});const token=localStorage.chuma_token;if(token)opt.headers.Authorization='Bearer '+token;let r=await fetch(url,opt);let x=await r.json();if(r.status===401){localStorage.removeItem('chuma_token');throw new Error('Требуется токен доступа. Укажи CHUMA_ADMIN_TOKEN владельца облачного сервиса.')} if(!r.ok)throw new Error(x.message||x.error||r.status);return x}async function boot(){try{let cfg=await j('/config');if(cfg.auth_required&&!localStorage.chuma_token){let t=prompt('Введите токен доступа CHUMA:');if(t){localStorage.chuma_token=t.trim();}}let b=await j('/budget');let x=await j('/provider');$("provider").innerHTML='Ядро: <span class="ok">ONLINE</span> · '+x.version+' · provider: '+x.name+(x.connected?'':' · <span class="warn">внешний генератор не подключён</span>')+' · budget: '+b.mode+(b.allow_paid?'':' · <span class="ok">paid OFF</span>')}catch(e){$("provider").textContent='Ошибка: '+e}}function setToken(){const t=prompt('Токен доступа CHUMA:');if(t===null)return;localStorage.chuma_token=t.trim();location.reload();}function resetLocal(){localStorage.removeItem('chuma_token');localStorage.removeItem('chuma_owner');localStorage.removeItem('chuma_character');owner='';character='';$("owner").textContent='';$("character").textContent='';$("status").textContent='—';$("result").innerHTML='';}async function createOwner(){try{let x=await j('/owners',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});owner=x.owner_id;localStorage.chuma_owner=owner;show()}catch(e){alert(e.message)}}async function uploadReference(){if(!owner||!character)return alert('Сначала создайте владельца и персонажа.');const file=$('reference').files[0];if(!file)return alert('Выберите изображение.');try{let r=await fetch('/characters/'+character+'/reference',{method:'POST',headers:{'Content-Type':file.type,'X-Owner-ID':owner,'X-Filename':file.name,...(localStorage.chuma_token?{'Authorization':'Bearer '+localStorage.chuma_token}:{})},body:file});let x=await r.json();if(!r.ok)throw new Error(x.message||x.error||r.status);$('reference_status').textContent='Референс загружен: '+x.asset_id;await status();await gallery()}catch(e){$('reference_status').textContent='Ошибка: '+e.message}}async function createCharacter(){if(!owner)return alert('Сначала нажмите «Создать владельца».');try{let card=$('card').value?{description:$('card').value}:undefined;let x=await j('/characters',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({owner_id:owner,name:$('name').value||'CHUMA',card})});character=x.character_id;localStorage.chuma_character=character;show();await status()}catch(e){alert(e.message)}}async function cycle(){if(!owner||!character)return alert('Сначала создайте владельца и персонажа.');try{let x=await j('/jobs',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({owner_id:owner,character_id:character,platform:'local-test'})});$('result').innerHTML='<pre>'+JSON.stringify(x,null,2)+'</pre>';let id=x.job_id;let timer=setInterval(async()=>{try{let job=await j('/jobs/'+id);$('result').innerHTML='<pre>'+JSON.stringify(job,null,2)+'</pre>';if(['SUCCEEDED','DEAD_LETTER'].includes(job.status)){clearInterval(timer);await status();await gallery()}}catch(e){clearInterval(timer);$('result').textContent=e.message}},1500)}catch(e){alert(e.message)}}async function gallery(){if(!owner)return;try{let r=await j('/status/'+owner);if(!r.artifacts_detail.length){$('gallery').innerHTML='<div class="muted">Артефактов пока нет.</div>';return;}$('gallery').innerHTML=r.artifacts_detail.map(a=>'<div class="tile"><img src="/artifacts/'+a.artifact_id+'" loading="lazy"><small>'+a.variant+' · '+a.provider+' · '+a.status+'</small></div>').join('')}catch(e){$('gallery').textContent=e.message}}async function status(){if(!owner)return;$("status").textContent='Загрузка…';try{let x=await j('/status/'+owner);$("status").textContent=JSON.stringify(x,null,2)}catch(e){$("status").textContent=e.message}}show();boot();if(owner){status();gallery()}</script></body></html>"""
+        html = r"""<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CHUMA OS · IP Factory</title>
+<style>
+:root{--bg:#08090c;--panel:#101217;--panel2:#151820;--line:#242833;--text:#f5f7fb;--muted:#8d94a3;--accent:#b8ff4a;--accent2:#8fe52d;--danger:#ff6b7a;--shadow:0 20px 60px rgba(0,0,0,.35)}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 70% -10%,#20270f 0,#0b0d11 34%,var(--bg) 65%);color:var(--text);font:14px/1.5 Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+button,input,textarea{font:inherit}button{border:0;cursor:pointer} .app{min-height:100vh;display:grid;grid-template-columns:230px 1fr}
+.sidebar{position:sticky;top:0;height:100vh;border-right:1px solid var(--line);background:rgba(8,9,12,.82);backdrop-filter:blur(20px);padding:24px 16px;display:flex;flex-direction:column}
+.logo{display:flex;align-items:center;gap:10px;font-weight:800;font-size:18px;letter-spacing:.04em;padding:6px 10px 28px}.logo-mark{width:34px;height:34px;border-radius:10px;background:var(--accent);color:#090b0d;display:grid;place-items:center;font-weight:950}
+.nav{display:grid;gap:6px}.nav button{width:100%;text-align:left;padding:11px 12px;border-radius:10px;background:transparent;color:#9da4b2}.nav button.active,.nav button:hover{background:#171a20;color:#fff}.nav .dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--accent);margin-right:10px;vertical-align:middle}
+.side-bottom{margin-top:auto;border-top:1px solid var(--line);padding-top:16px}.side-bottom button{width:100%;margin-top:7px;padding:10px;border-radius:9px;background:#14171d;color:#c6cbd5;border:1px solid var(--line)}
+main{min-width:0;padding:30px 34px 60px;max-width:1500px;width:100%;margin:auto}.topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:28px}.eyebrow{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.16em}.top-title{font-size:25px;font-weight:750;margin-top:3px}.status-pill{display:flex;align-items:center;gap:8px;background:#11151a;border:1px solid var(--line);padding:8px 12px;border-radius:999px;color:#c7ced8}.status-dot{width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 12px var(--accent)}
+.hero{display:grid;grid-template-columns:1.5fr .8fr;gap:18px;margin-bottom:18px}.hero-card,.card{background:linear-gradient(145deg,rgba(20,23,30,.95),rgba(12,14,19,.96));border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow)}.hero-card{padding:30px;min-height:235px;position:relative;overflow:hidden}.hero-card:after{content:"";position:absolute;width:280px;height:280px;border-radius:50%;right:-100px;top:-130px;background:rgba(184,255,74,.12);filter:blur(4px)}
+.hero h1{font-size:42px;line-height:1.02;margin:10px 0 12px;letter-spacing:-.04em}.hero p{color:#aeb4c0;max-width:620px;margin:0}.accent{color:var(--accent)}.hero-actions{display:flex;gap:10px;margin-top:24px}.primary{background:var(--accent);color:#090b0d;padding:11px 17px;border-radius:10px;font-weight:800}.primary:hover{background:#c9ff78}.secondary{background:#191c23;color:#e9ecf2;border:1px solid #2b303b;padding:11px 17px;border-radius:10px}.secondary:hover{background:#222631}
+.metric{padding:22px;display:flex;flex-direction:column;justify-content:space-between}.metric-label{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.11em}.metric-value{font-size:31px;font-weight:800;margin-top:8px}.metric-note{color:#7e8796;font-size:12px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px}.card{padding:22px}.card-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}.card h2{font-size:17px;margin:0}.card-sub{font-size:12px;color:var(--muted)}
+.field{margin-bottom:14px}.field label{display:block;color:#a8afbb;font-size:12px;margin-bottom:7px}.field input,.field textarea{width:100%;background:#0d1015;color:#f2f4f8;border:1px solid #2a2f39;border-radius:10px;padding:11px 12px;outline:none}.field input:focus,.field textarea:focus{border-color:#65734d;box-shadow:0 0 0 3px rgba(184,255,74,.07)}
+.upload{border:1px dashed #39404d;border-radius:14px;padding:18px;text-align:center;background:#0d1014}.upload input{width:100%;color:#9fa7b4}.upload-title{font-weight:650;margin-bottom:4px}.upload-help{font-size:12px;color:var(--muted)}
+.preview{margin-top:12px;border-radius:12px;overflow:hidden;background:#080a0d;min-height:80px;display:grid;place-items:center}.preview img{width:100%;max-height:260px;object-fit:contain}
+.action-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}.action{padding:14px;border-radius:12px;background:#14171d;border:1px solid var(--line);color:#eef1f6;text-align:left}.action strong{display:block;margin-bottom:3px}.action span{font-size:12px;color:var(--muted)}.action:hover{border-color:#414856;background:#191d25}
+.gallery{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.tile{background:#0c0f13;border:1px solid var(--line);border-radius:13px;overflow:hidden}.tile img{width:100%;height:240px;display:block;object-fit:cover;background:#08090c}.tile-meta{padding:10px 11px;color:#9ea6b4;font-size:11px}.empty{padding:30px;color:var(--muted);text-align:center;border:1px dashed #2b3039;border-radius:12px}
+pre{margin:0;background:#090b0e;border:1px solid var(--line);padding:14px;border-radius:12px;white-space:pre-wrap;word-break:break-word;color:#aeb6c3;font-size:11px;max-height:250px;overflow:auto}.ok{color:var(--accent)}.warn{color:#f2c65b}.muted{color:var(--muted)}.hidden{display:none!important}
+@media(max-width:1000px){.app{grid-template-columns:72px 1fr}.sidebar{padding:18px 10px}.logo{justify-content:center;padding-bottom:24px}.logo span:last-child,.nav button span:last-child,.side-bottom button{display:none}.nav button{text-align:center}.hero{grid-template-columns:1fr}.grid2{grid-template-columns:1fr}}
+@media(max-width:700px){.app{display:block}.sidebar{position:static;height:auto;border-right:0;border-bottom:1px solid var(--line);display:block;padding:10px 12px}.logo{justify-content:flex-start;padding:5px 0 10px}.logo span:last-child{display:block}.nav{display:flex;overflow:auto}.nav button{white-space:nowrap}.nav button span:last-child{display:inline}.side-bottom{display:none}main{padding:20px 14px 40px}.topbar{align-items:flex-start}.top-title{font-size:21px}.hero h1{font-size:34px}.hero-card{padding:23px}.gallery{grid-template-columns:1fr 1fr}.tile img{height:180px}}
+</style>
+</head>
+<body>
+<div class="app">
+<aside class="sidebar">
+  <div class="logo"><div class="logo-mark">C</div><span>CHUMA OS</span></div>
+  <nav class="nav">
+    <button class="active" onclick="scrollToId('overview')"><span class="dot"></span><span>Обзор</span></button>
+    <button onclick="scrollToId('character-card')"><span>◇</span>&nbsp; <span>Персонаж</span></button>
+    <button onclick="scrollToId('gallery-card')"><span>▧</span>&nbsp; <span>Контент</span></button>
+    <button onclick="scrollToId('state-card')"><span>◌</span>&nbsp; <span>Система</span></button>
+  </nav>
+  <div class="side-bottom"><div class="muted" style="font-size:11px;padding:0 4px">IP FACTORY · 2.5.6</div><button onclick="setToken()">Токен доступа</button><button onclick="resetLocal()">Сбросить сессию</button></div>
+</aside>
+<main>
+  <div class="topbar" id="overview">
+    <div><div class="eyebrow">Image Content Factory</div><div class="top-title">Рабочее пространство</div></div>
+    <div class="status-pill"><span class="status-dot"></span><span id="provider">Подключение…</span></div>
+  </div>
+
+  <section class="hero">
+    <div class="hero-card">
+      <div class="eyebrow">CHUMA / CHARACTER LAB</div>
+      <h1>Создавай персонажей.<br><span class="accent">Строй IP.</span></h1>
+      <p>Единая точка управления персонажем, референсом, генерацией изображений и дальнейшим обучением фабрики.</p>
+      <div class="hero-actions"><button class="primary" onclick="cycle()">▶ Запустить производство</button><button class="secondary" onclick="gallery()">Обновить галерею</button></div>
+    </div>
+    <div class="card metric"><div class="metric-label">Текущий персонаж</div><div class="metric-value" id="metric-name">CHUMA</div><div class="metric-note" id="character">Персонаж ещё не создан</div></div>
+  </section>
+
+  <section class="grid2">
+    <div class="card" id="character-card">
+      <div class="card-head"><div><h2>Персонаж</h2><div class="card-sub">Identity foundation</div></div><span class="eyebrow">01</span></div>
+      <div class="field"><label>Имя</label><input id="name" value="CHUMA" placeholder="Имя персонажа"></div>
+      <div class="field"><label>Описание</label><textarea id="card" rows="3" placeholder="Коротко опиши характер, визуальный образ и особенности…"></textarea></div>
+      <button class="primary" onclick="createCharacter()">Создать персонажа</button>
+    </div>
+
+    <div class="card" id="reference-card">
+      <div class="card-head"><div><h2>Референс внешности</h2><div class="card-sub">Identity reference</div></div><span class="eyebrow">02</span></div>
+      <div class="upload"><div class="upload-title">Загрузи исходное изображение</div><div class="upload-help">JPG, PNG или WebP · до 10 МБ</div><input id="reference" type="file" accept="image/jpeg,image/png,image/webp" onchange="previewReference()"></div>
+      <div id="reference_preview" class="preview hidden"></div>
+      <div style="display:flex;gap:10px;align-items:center;margin-top:12px"><button class="secondary" onclick="uploadReference()">Сохранить референс</button><span id="reference_status" class="muted"></span></div>
+    </div>
+  </section>
+
+  <section class="card" style="margin-top:18px">
+    <div class="card-head"><div><h2>Производство</h2><div class="card-sub">Автономный production loop</div></div><span class="eyebrow">03</span></div>
+    <div class="action-row">
+      <button class="action" onclick="cycle()"><strong>Запустить автономный цикл</strong><span>Generate → QC → Publish → Learn</span></button>
+      <button class="action" onclick="status()"><strong>Обновить состояние</strong><span>Получить текущие сигналы и прогресс</span></button>
+    </div>
+    <div id="result" style="margin-top:14px"></div>
+  </section>
+
+  <section class="card" id="gallery-card" style="margin-top:18px">
+    <div class="card-head"><div><h2>Визуальная библиотека</h2><div class="card-sub">Последние созданные изображения</div></div><button class="secondary" onclick="gallery()">Обновить</button></div>
+    <div id="gallery" class="gallery"><div class="empty">Изображения появятся здесь после производства.</div></div>
+  </section>
+
+  <section class="card" id="state-card" style="margin-top:18px">
+    <div class="card-head"><div><h2>Состояние фабрики</h2><div class="card-sub">Diagnostics / provenance / jobs</div></div><span class="eyebrow">SYSTEM</span></div>
+    <pre id="status">—</pre>
+  </section>
+</main>
+</div>
+<script>
+const $=id=>document.getElementById(id);
+let owner=localStorage.chuma_owner||'',character=localStorage.chuma_character||'';
+function scrollToId(id){document.getElementById(id)?.scrollIntoView({behavior:'smooth',block:'start'})}
+function show(){if(owner)$("character").textContent="ID владельца: "+owner;if(character)$("character").textContent="ID: "+character}
+async function j(url,opt={}){opt.headers=Object.assign({'Content-Type':'application/json'},opt.headers||{});const token=localStorage.chuma_token;if(token)opt.headers.Authorization='Bearer '+token;let r=await fetch(url,opt);let x=await r.json();if(r.status===401){localStorage.removeItem('chuma_token');throw new Error('Требуется токен доступа CHUMA.')}if(!r.ok)throw new Error(x.message||x.error||r.status);return x}
+async function boot(){try{let cfg=await j('/config');if(cfg.auth_required&&!localStorage.chuma_token){let t=prompt('Введите токен доступа CHUMA:');if(t){localStorage.chuma_token=t.trim();}}let b=await j('/budget');let x=await j('/provider');$("provider").innerHTML='<span class="ok">ONLINE</span> · '+x.version+' · '+x.name+' · budget '+b.mode+(b.allow_paid?'':' · paid OFF')}catch(e){$("provider").textContent='Ошибка: '+e.message}}
+function setToken(){const t=prompt('Токен доступа CHUMA:');if(t===null)return;localStorage.chuma_token=t.trim();location.reload()}
+function resetLocal(){localStorage.removeItem('chuma_token');localStorage.removeItem('chuma_owner');localStorage.removeItem('chuma_character');owner='';character='';location.reload()}
+async function createOwner(){try{let x=await j('/owners',{method:'POST',body:'{}'});owner=x.owner_id;localStorage.chuma_owner=owner;show()}catch(e){alert(e.message)}}
+function previewReference(){const f=$('reference').files[0];if(!f)return;const u=URL.createObjectURL(f);$('reference_preview').innerHTML='<img src="'+u+'">';$('reference_preview').classList.remove('hidden')}
+async function uploadReference(){if(!owner||!character)return alert('Сначала создай владельца и персонажа.');const file=$('reference').files[0];if(!file)return alert('Выбери изображение.');try{let r=await fetch('/characters/'+character+'/reference',{method:'POST',headers:{'Content-Type':file.type,'X-Owner-ID':owner,'X-Filename':file.name,...(localStorage.chuma_token?{'Authorization':'Bearer '+localStorage.chuma_token}:{})},body:file});let x=await r.json();if(!r.ok)throw new Error(x.message||x.error||r.status);$('reference_status').innerHTML='<span class="ok">✓ Референс сохранён</span>';await status();await gallery()}catch(e){$('reference_status').textContent='Ошибка: '+e.message}}
+async function createCharacter(){if(!owner)return alert('Сначала создай владельца.');try{let card=$('card').value?{description:$('card').value}:undefined;let x=await j('/characters',{method:'POST',body:JSON.stringify({owner_id:owner,name:$('name').value||'CHUMA',card})});character=x.character_id;localStorage.chuma_character=character;$('metric-name').textContent=$('name').value||'CHUMA';show();await status()}catch(e){alert(e.message)}}
+async function cycle(){if(!owner||!character)return alert('Сначала создай владельца и персонажа.');try{let x=await j('/jobs',{method:'POST',body:JSON.stringify({owner_id:owner,character_id:character,platform:'local-test'})});$('result').innerHTML='<pre>Производство запущено · '+x.job_id+'</pre>';let id=x.job_id;let timer=setInterval(async()=>{try{let job=await j('/jobs/'+id);$('result').innerHTML='<pre>'+JSON.stringify(job,null,2)+'</pre>';if(['SUCCEEDED','DEAD_LETTER'].includes(job.status)){clearInterval(timer);await status();await gallery()}}catch(e){clearInterval(timer);$('result').textContent=e.message}},1500)}catch(e){alert(e.message)}}
+async function gallery(){if(!owner)return;try{let r=await j('/status/'+owner);if(!r.artifacts_detail.length){$('gallery').innerHTML='<div class="empty">Изображения появятся здесь после производства.</div>';return}let token=localStorage.chuma_token;$('gallery').innerHTML='';for(const a of r.artifacts_detail){let tile=document.createElement('div');tile.className='tile';let img=document.createElement('img');img.loading='lazy';try{let rr=await fetch('/artifacts/'+a.artifact_id,{headers:token?{Authorization:'Bearer '+token}:{}});let blob=await rr.blob();img.src=URL.createObjectURL(blob)}catch(e){}tile.appendChild(img);let meta=document.createElement('div');meta.className='tile-meta';meta.textContent=a.variant+' · '+a.provider+' · '+a.status;tile.appendChild(meta);$('gallery').appendChild(tile)}}catch(e){$('gallery').innerHTML='<div class="empty">'+e.message+'</div>'}}
+async function status(){if(!owner)return;$("status").textContent='Загрузка…';try{let x=await j('/status/'+owner);$("status").textContent=JSON.stringify(x,null,2)}catch(e){$("status").textContent=e.message}}
+show();boot();if(owner){status();gallery()}
+</script>
+</body>
+</html>"""
         b=html.encode('utf-8'); self.send_response(200); self.send_header('Content-Type','text/html; charset=utf-8'); self.send_header('Cache-Control','no-store, no-cache, must-revalidate, max-age=0'); self.send_header('Pragma','no-cache'); self.send_header('Expires','0'); self.send_header('Content-Length',str(len(b))); self.end_headers(); self.wfile.write(b)
 
     def do_GET(self):
