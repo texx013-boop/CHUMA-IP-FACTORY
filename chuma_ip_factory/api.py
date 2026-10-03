@@ -275,7 +275,9 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLower
                 if n<1 or n>25*1024*1024:
                     if n>25*1024*1024: self.rfile.read(25*1024*1024+1)
                     return self.sendj(413,{'error':'payload_too_large','message':'voice file must be <= 25 MiB'})
-                mime=self.headers.get('Content-Type','').split(';',1)[0].strip().lower(); owner=self.headers.get('X-Owner-ID','').strip(); cid=p.split('/')[2]; body=self.rfile.read(n)
+                mime=self.headers.get('Content-Type','').split(';',1)[0].strip().lower(); owner=self.headers.get('X-Owner-ID','').strip(); cid=p.split('/')[2]
+                if not self.require_owner(owner): return
+                body=self.rfile.read(n)
                 return self.sendj(201,self.factory.attach_voice(owner,cid,body,mime,self.headers.get('X-Filename','voice')))
             if p.startswith('/characters/') and p.endswith('/reference'):
                 if n<1 or n>10*1024*1024:
@@ -284,6 +286,7 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLower
                 mime=self.headers.get('Content-Type','').split(';',1)[0].strip().lower()
                 owner=self.headers.get('X-Owner-ID','').strip()
                 cid=p.split('/')[2] if len(p.split('/'))>2 else ''
+                if not self.require_owner(owner): return
                 body=self.rfile.read(n)
                 result=f.attach_reference(owner,cid,body,mime,self.headers.get('X-Filename','reference'))
                 return self.sendj(201,result)
