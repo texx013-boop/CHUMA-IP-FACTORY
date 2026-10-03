@@ -1,0 +1,10 @@
+[Unit]
+Description=CHUMA PostgreSQL backup
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/chuma/infra
+ExecStart=/opt/chuma/infra/backup.sh
+Environment=BACKUP_RETENTION_DAYS=14
