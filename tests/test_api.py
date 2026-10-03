@@ -63,7 +63,7 @@ def test_http_health_and_auth_contract():
             base + "/jobs",
             data=json.dumps({"owner_id":owner_id,"character_id":character_id,"idempotency_key":"api-job-1"}).encode(),
             method="POST",
-            headers={"Authorization": "Bearer test-admin-token", "Content-Type": "application/json"},
+            headers={"Authorization": "Bearer test-admin-token", "Content-Type": "application/json", "X-Owner-ID": owner_id},
         )
         with urllib.request.urlopen(job_req, timeout=5) as r:
             assert r.status == 202
