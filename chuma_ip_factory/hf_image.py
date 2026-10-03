@@ -11,9 +11,10 @@ class HFImageProvider:
     name = "huggingface-inference"
     connected = False
 
-    def __init__(self, token=None, model=None):
+    def __init__(self, token=None, model=None, reference_model=None):
         self.token = token or os.getenv("HF_TOKEN")
         self.model = model or os.getenv("CHUMA_HF_MODEL", "black-forest-labs/FLUX.1-Krea-dev")
+        self.reference_model = reference_model or os.getenv("CHUMA_HF_REFERENCE_MODEL", "Qwen/Qwen-Image-Edit")
         self.connected = bool(self.token)
 
     def generate(self, request: dict) -> dict:
@@ -39,12 +40,29 @@ class HFImageProvider:
             "high detail, editorial social-media portrait, no text, no watermark."
         )
         client = InferenceClient(provider="auto", api_key=self.token)
-        image = client.text_to_image(
-            prompt,
-            model=self.model,
-            width=1024,
-            height=1280,
-        )
+        reference_path = request.get("reference_image_path")
+        reference_model = request.get("reference_model") or self.reference_model
+        if reference_path:
+            with open(reference_path, "rb") as image_file:
+                input_image = image_file.read()
+            prompt = (
+                f"Use the supplied reference image as the primary identity reference. "
+                f"Preserve the same recognizable adult person, facial structure, hair, eye color, "
+                f"skin characteristics and overall identity. Create a new photorealistic scene "
+                f"for the requested content while keeping the person consistent. {prompt}"
+            )
+            image = client.image_to_image(
+                input_image,
+                prompt=prompt,
+                model=reference_model,
+            )
+        else:
+            image = client.text_to_image(
+                prompt,
+                model=self.model,
+                width=1024,
+                height=1280,
+            )
         buf = io.BytesIO()
         image.save(buf, format="PNG")
         data = buf.getvalue()
