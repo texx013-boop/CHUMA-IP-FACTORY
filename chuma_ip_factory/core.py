@@ -175,6 +175,46 @@ class CHUMA:
         self.store.db.execute('INSERT INTO characters VALUES(?,?,?,?,?,?,?,?,?,?)',(cid,owner,name,'BIRTH',json.dumps(card,ensure_ascii=False),json.dumps(genome),json.dumps(dna),t,t,1))
         self.store.db.execute('INSERT INTO health VALUES(?,?,?,?,?,?,?)',(cid,owner,1.0,0.0,0.0,0.0,t)); self.store.commit()
         self.store.event(owner,'CHARACTER_CREATED','CHARACTER',cid,{'name':name}); self.store.event(owner,'DISCOVERY_QUEUED','CHARACTER',cid,{'program':'image-first'}); return cid
+
+    def character_profile(self,owner,cid):
+        self._auth(owner)
+        row=self.store.one('SELECT character_id,name,state,card_json,genome_json,content_dna_json,version,updated_at FROM characters WHERE character_id=? AND owner_id=?',(cid,owner))
+        if not row: raise AuthorizationError()
+        out=dict(row)
+        for key in ('card_json','genome_json','content_dna_json'):
+            out[key[:-5]]=json.loads(out.pop(key) or '{}')
+        return out
+
+    def update_character_preferences(self,owner,cid,patch):
+        self._auth(owner)
+        row=self.store.one('SELECT * FROM characters WHERE character_id=? AND owner_id=?',(cid,owner))
+        if not row: raise AuthorizationError()
+        card=json.loads(row['card_json'] or '{}')
+        control=card.setdefault('user_controls',{})
+        for key in ('personality','appearance','style','behavior','signature','voice','creative_direction','dna_notes'):
+            if key in patch and patch[key] is not None: control[key]=patch[key]
+        if 'voice' in patch and patch['voice'] is not None:
+            voice=patch['voice']
+            if isinstance(voice,dict) and voice.get('source') not in ('user','synthetic'): raise ValueError('voice.source must be user or synthetic')
+            card['voice_profile']=voice
+        t=now()
+        self.store.db.execute('UPDATE characters SET card_json=?,updated_at=?,version=version+1 WHERE character_id=? AND owner_id=?',(json.dumps(card,ensure_ascii=False),t,cid,owner))
+        self.store.commit(); self.store.event(owner,'CHARACTER_PREFERENCES_UPDATED','CHARACTER',cid,{'fields':sorted(patch.keys())}); self.store.audit(owner,'CHARACTER_PREFERENCES_UPDATED',cid,{'fields':sorted(patch.keys())})
+        return self.character_profile(owner,cid)
+
+    def randomize_character_dna(self,owner,cid,seed=None):
+        self._auth(owner)
+        row=self.store.one('SELECT * FROM characters WHERE character_id=? AND owner_id=?',(cid,owner))
+        if not row: raise AuthorizationError()
+        import random
+        rng=random.Random(seed if seed is not None else uuid.uuid4().hex)
+        pools={'energy':['спокойная','электрическая','мягкая','дерзкая','загадочная'],'humor':['сухой','ироничный','абсурдный','мягкий','наблюдательный'],'social':['интровертный','селективный','открытый','независимый'],'visual':['минималистичный','кинематографичный','неоновый','естественный','fashion'],'signature':['взгляд в камеру','наклон головы','улыбка одним уголком','пауза перед реакцией','жест рукой']}
+        dna={k:rng.choice(v) for k,v in pools.items()}
+        card=json.loads(row['card_json'] or '{}'); card.setdefault('user_controls',{})['random_dna']=dna; card['dna_mode']='RANDOMIZED'
+        t=now()
+        self.store.db.execute('UPDATE characters SET card_json=?,updated_at=?,version=version+1 WHERE character_id=? AND owner_id=?',(json.dumps(card,ensure_ascii=False),t,cid,owner))
+        self.store.commit(); self.store.event(owner,'CHARACTER_DNA_RANDOMIZED','CHARACTER',cid,{'dna':dna}); self.store.audit(owner,'CHARACTER_DNA_RANDOMIZED',cid,{'dna':dna})
+        return self.character_profile(owner,cid)
     def attach_reference(self,owner,cid,data,mime_type='image/jpeg',filename='reference'):
         self._auth(owner)
         row=self.store.one('SELECT * FROM characters WHERE character_id=? AND owner_id=?',(cid,owner))
