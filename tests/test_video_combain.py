@@ -53,6 +53,24 @@ def test_video_combain_manifest_job_and_provenance():
     d.cleanup()
 
 
+def test_video_combain_does_not_double_claim_running_job():
+    d = tempfile.TemporaryDirectory()
+    factory = CHUMA(Path(d.name) / "db.sqlite", Path(d.name) / "media")
+    owner = factory.owner()
+    character_id = factory.create_character(owner, "Claim Test")
+    video = VideoCombain(factory)
+    job = video.create_job(owner, character_id)
+    factory.store.db.execute(
+        "UPDATE video_jobs SET status='RUNNING' WHERE video_job_id=?",
+        (job["video_job_id"],),
+    )
+    factory.store.commit()
+    current = video.run_job(job["video_job_id"])
+    assert current["status"] == "RUNNING"
+    factory.store.close()
+    d.cleanup()
+
+
 def test_video_combain_is_idempotent_after_success():
     d = tempfile.TemporaryDirectory()
     factory = CHUMA(Path(d.name) / "db.sqlite", Path(d.name) / "media")
