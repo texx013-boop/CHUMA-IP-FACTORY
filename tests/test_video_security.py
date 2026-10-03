@@ -1,4 +1,3 @@
-import io
 import socket
 
 import pytest
@@ -107,7 +106,7 @@ def test_video_job_failure_does_not_persist_internal_path_details():
     video = VideoCombain(factory)
 
     class FailingEngine:
-        name = "failing"
+        name = "external-api"
         connected = True
         max_output_bytes = 1024
 
@@ -115,7 +114,7 @@ def test_video_job_failure_does_not_persist_internal_path_details():
             raise RuntimeError("/srv/private/provider-secret/path")
 
     video.engine = FailingEngine()
-    job = video.create_job(owner, character_id, engine="test-manifest")
+    job = video.create_job(owner, character_id, engine="external-api")
     try:
         with pytest.raises(RuntimeError):
             video.run_job(job["video_job_id"])
