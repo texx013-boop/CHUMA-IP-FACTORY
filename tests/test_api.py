@@ -181,7 +181,7 @@ def test_artifact_download_rejects_tampered_bytes():
     try:
         req = urllib.request.Request(
             f"http://127.0.0.1:{server.server_port}/artifacts/{artifact_id}",
-            headers={"Authorization": "Bearer secret"},
+            headers={"Authorization": "Bearer secret", "X-Owner-ID": owner},
         )
         try:
             urllib.request.urlopen(req, timeout=5)
