@@ -1,13 +1,15 @@
-# CHUMA IP FACTORY
+# CHUMA IP FACTORY / SHUMA.SPACE
 
-Private repository for the CHUMA IP FACTORY / CHUMA OS implementation.
+Private repository for the CHUMA IP FACTORY / SHUMA.SPACE implementation.
 
 ## Current baseline
 
+- User-facing product: **SHUMA.SPACE**
+- Internal core: **CHUMA IP FACTORY**
+- Version: **2.5.7**
 - Architecture: Master Architecture 2.0
 - Image-first production strategy
 - Owner is not the daily operator
-- Current production milestone: 2.5.5
 - Zero-budget-first spending policy: free by default, paid generation requires explicit opt-in
 - No subscriptions or automatic provider upgrades
 - Durable autonomous job queue with idempotency, retries and dead-letter handling
@@ -15,10 +17,39 @@ Private repository for the CHUMA IP FACTORY / CHUMA OS implementation.
 - External image-provider retry/backoff with persisted provider-run outcomes
 - Liveness and database readiness endpoints
 - External provider integrations remain explicitly disconnected until authorized
-- Zero-budget-first: Hugging Face routed inference is the default AI path when a token is supplied; paid generation remains OFF unless explicitly enabled
-- No monthly subscription is required; Hugging Face documents a small monthly free credit for free users, and extra usage requires purchased credits
-- Cloud runtime: Railway
-- Current production smoke test: public HTTP UI online
+
+## Character control
+
+The product supports controlled user influence over a character:
+
+- provide or edit character DNA;
+- randomize DNA through the factory;
+- choose a synthetic/generated voice;
+- attach a user's own voice asset;
+- preserve character identity and provenance across generated content.
+
+## Image → Video Combain
+
+Video is a modular extension of the image-first core.
+
+Current Video Combain capabilities:
+
+- create a video job from an existing image-content item;
+- create a video job automatically from the latest READY image-content item for a character;
+- preserve owner_id, character_id, source_content_id and source_asset_ids provenance;
+- use a free test-manifest engine for deterministic pipeline validation;
+- connect an external video renderer through an explicit API adapter;
+- block unconfigured external engines;
+- respect the global zero-budget policy;
+- retry transient provider failures;
+- enforce provider response and output-size limits;
+- expose the latest image → video flow directly in SHUMA.SPACE.
+
+The external renderer is intentionally an adapter boundary: SHUMA.SPACE does not depend on one specific video provider.
+
+## Production policy
+
+The system is designed to proceed autonomously after the user has configured the required account/provider credentials. External authorization, API keys and paid-provider opt-in remain explicit user-controlled actions.
 
 ## Repository policy
 
@@ -28,8 +59,15 @@ No secrets, runtime databases, media, credentials, or generated private artifact
 
 Railway cloud deployment, with provider-agnostic application contracts and external service authorization handled separately.
 
-## 2.5.7
+## Verification rule
 
-Reference-driven image generation is wired for Hugging Face image-to-image providers. Character reference assets are preserved in provenance and can drive new content generation when Hugging Face is connected.
+A feature is considered complete only after:
 
-<!-- Railway force redeploy 2026-10-03 -->
+1. implementation;
+2. automated tests;
+3. failure-path checks;
+4. repeat verification;
+5. build/CI verification;
+6. saving the verified result to the repository.
+
+Current Video Combain hardening includes tests for image → video chaining and provider response/base64/output-size limits.
