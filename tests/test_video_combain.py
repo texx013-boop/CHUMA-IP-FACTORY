@@ -203,6 +203,16 @@ def test_video_http_provider_response_limit():
             assert str(exc) == "video_provider_response_too_large"
 
 
+def test_video_combain_idempotency_lookup_index_is_created():
+    d = tempfile.TemporaryDirectory()
+    factory = CHUMA(Path(d.name) / "db.sqlite", Path(d.name) / "media")
+    VideoCombain(factory)
+    indexes = factory.store.q("PRAGMA index_list('video_jobs')")
+    assert any(row["name"] == "idx_video_jobs_source_dedupe" for row in indexes)
+    factory.store.close()
+    d.cleanup()
+
+
 def test_video_combain_idempotency_uses_source_content_and_brief():
     d = tempfile.TemporaryDirectory()
     factory = CHUMA(Path(d.name) / "db.sqlite", Path(d.name) / "media")
