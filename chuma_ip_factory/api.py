@@ -224,7 +224,7 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLower
             try: data=p.read_bytes()
             except FileNotFoundError: return self.sendj(404,{'error':'artifact_file_not_found'})
             digest = __import__('hashlib').sha256(data).hexdigest()
-            if row.get('digest') and not hmac.compare_digest(digest, row['digest']):
+            if row['digest'] and not hmac.compare_digest(digest, row['digest']):
                 return self.sendj(409,{'error':'artifact_integrity_failed'})
             self.send_response(200); self.send_header('Content-Type',row['mime_type']); self.send_header('Cache-Control','no-store'); self.send_header('Content-Length',str(len(data))); self.end_headers(); self.wfile.write(data); return
         if not self.require_auth(): return
