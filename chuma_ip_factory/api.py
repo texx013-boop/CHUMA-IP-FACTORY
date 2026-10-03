@@ -23,6 +23,14 @@ class API(BaseHTTPRequestHandler):
             return True
         self.sendj(401,{"error":"unauthorized","message":"valid Bearer token required"}, extra={"WWW-Authenticate":"Bearer"})
         return False
+    def request_owner(self):
+        return self.headers.get('X-Owner-ID','').strip()
+    def require_owner(self, owner_id):
+        requested=self.request_owner()
+        if not requested or not owner_id or not hmac.compare_digest(requested, owner_id):
+            self.sendj(403,{'error':'owner_forbidden'})
+            return False
+        return True
     def sendj(self,status,obj,extra=None):
         b=json.dumps(obj,ensure_ascii=False).encode(); self.send_response(status); self.send_header('Content-Type','application/json; charset=utf-8'); self.send_header('Cache-Control','no-store');
         for k,v in (extra or {}).items(): self.send_header(k,v)
@@ -164,7 +172,7 @@ let owner=localStorage.chuma_owner||'',character=localStorage.chuma_character||'
 function toast(msg,kind='ok'){const el=$('toast');el.textContent=msg;el.style.borderColor=kind==='err'?'rgba(255,100,125,.4)':'rgba(200,255,53,.28)';el.style.opacity='1';el.style.transform='translateY(0)';clearTimeout(window.__toast);window.__toast=setTimeout(()=>{el.style.opacity='0';el.style.transform='translateY(20px)'},2800)}
 function scrollToId(id){document.getElementById(id)?.scrollIntoView({behavior:'smooth',block:'start'});document.querySelectorAll('.nav button').forEach(b=>b.classList.remove('active'));const map={overview:0,'profile-card':1,'character-card':2,'gallery-card':3,'state-card':4};const buttons=document.querySelectorAll('.nav button');if(map[id]!=null&&buttons[map[id]])buttons[map[id]].classList.add('active')}
 function show(){if(owner){$("character").textContent="ID владельца: "+owner;$("profile-owner").textContent=owner.slice(0,12)+'…'}if(character){$("character").textContent="ID: "+character;$("profile-character").textContent=$('metric-name').textContent||character}}
-async function j(url,opt={}){opt.headers=Object.assign({'Content-Type':'application/json'},opt.headers||{});const token=localStorage.chuma_token;if(token)opt.headers.Authorization='Bearer '+token;let r=await fetch(url,opt);let x=await r.json();if(r.status===401){localStorage.removeItem('chuma_token');throw new Error('Требуется токен доступа CHUMA.')}if(!r.ok)throw new Error(x.message||x.error||r.status);return x}
+async function j(url,opt={}){opt.headers=Object.assign({'Content-Type':'application/json'},opt.headers||{});if(owner)opt.headers['X-Owner-ID']=owner;const token=localStorage.chuma_token;if(token)opt.headers.Authorization='Bearer '+token;let r=await fetch(url,opt);let x=await r.json();if(r.status===401){localStorage.removeItem('chuma_token');throw new Error('Требуется токен доступа CHUMA.')}if(!r.ok)throw new Error(x.message||x.error||r.status);return x}
 let videoEngine='test-manifest'; async function videoStatus(){try{const x=await j('/video/status');const active=(x.engines||[]).find(e=>e.id==='external-api'&&e.connected);videoEngine=active?'external-api':'test-manifest';$('video-engines').innerHTML=(x.engines||[]).map(e=>'<div class="action"><strong>'+e.name+'</strong><span>'+e.description+' · '+(e.connected?'подключён':'готов к подключению')+'</span></div>').join('')}catch(e){$('video-engines').innerHTML='<div class="empty">'+e.message+'</div>'}}
 async function createVideoJob(){if(!owner||!character)return toast('Сначала создай персонажа','err');try{const x=await j('/video/jobs',{method:'POST',body:JSON.stringify({owner_id:owner,character_id:character,brief:{prompt:$('video-brief').value||'Character-consistent short video'},engine:videoEngine})});$('video-result').innerHTML='<pre>▶ Видеозадача создана · '+x.video_job_id+'</pre>';toast('Видеозадача создана');const done=await j('/video/jobs/'+x.video_job_id+'/run',{method:'POST',body:'{}'});$('video-result').innerHTML='<pre>'+JSON.stringify(done,null,2)+'</pre>'}catch(e){toast(e.message,'err')}}\nasync function createVideoFromLatest(){if(!owner||!character)return toast('Сначала создай персонажа','err');try{const x=await j('/video/from-latest-content',{method:'POST',body:JSON.stringify({owner_id:owner,character_id:character,brief:{prompt:$('video-brief').value||'Character-consistent short video from latest image content'},engine:videoEngine})});$('video-result').innerHTML='<pre>⚡ Видеозадача из image-контента · '+x.video_job_id+'</pre>';toast('Связка image → video создана');const done=await j('/video/jobs/'+x.video_job_id+'/run',{method:'POST',body:'{}'});$('video-result').innerHTML='<pre>'+JSON.stringify(done,null,2)+'</pre>'}catch(e){toast(e.message,'err')}}
 async function boot(){try{let cfg=await j('/config');if(cfg.auth_required&&!localStorage.chuma_token){let t=prompt('Введите токен доступа CHUMA:');if(t){localStorage.chuma_token=t.trim();}}let b=await j('/budget');let x=await j('/provider');$("provider").innerHTML='<span class="ok">ONLINE</span> · '+x.version+' · '+x.name+' · budget '+b.mode+(b.allow_paid?'':' · paid OFF');$("app-version").textContent=x.version;await hydrate()}catch(e){$("provider").textContent='Ошибка: '+e.message}}
@@ -209,9 +217,7 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLower
             aid=self.path.split('/')[-1]
             row=self.factory.store.one('SELECT owner_id,storage_path,mime_type,digest FROM artifacts WHERE artifact_id=?',(aid,))
             if not row: return self.sendj(404,{'error':'artifact_not_found'})
-            requested_owner = self.headers.get('X-Owner-ID','').strip()
-            if not requested_owner or not hmac.compare_digest(requested_owner, row['owner_id']):
-                return self.sendj(403,{'error':'artifact_forbidden'})
+            if not self.require_owner(row['owner_id']): return
             p=Path(row['storage_path']).resolve()
             root=Path(self.factory.asset_root).resolve()
             if root not in p.parents: return self.sendj(403,{'error':'forbidden'})
@@ -226,7 +232,9 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLower
         if self.path.startswith('/video/jobs/'):
             vid=self.path.split('/')[3]
             job=self.video_combain.get_job(vid)
-            return self.sendj(200,job) if job else self.sendj(404,{'error':'video_job_not_found'})
+            if not job: return self.sendj(404,{'error':'video_job_not_found'})
+            if not self.require_owner(job.get('owner_id')): return
+            return self.sendj(200,job)
         if self.path=='/provider': return self.sendj(200,self.factory.provider_status())
         if self.path=='/owners':
             owners=self.factory.store.q('SELECT owner_id,created_at FROM owners ORDER BY created_at DESC')
@@ -236,13 +244,18 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLower
                 out.append({'owner_id':o['owner_id'],'created_at':o['created_at'],'characters':[dict(c) for c in chars]})
             return self.sendj(200,{'owners':out})
         if self.path.startswith('/status/'):
-            return self.sendj(200,self.factory.status(self.path.split('/')[-1]))
+            owner=self.path.split('/')[-1]
+            if not self.require_owner(owner): return
+            return self.sendj(200,self.factory.status(owner))
         if self.path.startswith('/characters/') and self.path.endswith('/profile'):
-            cid=self.path.split('/')[2]; owner=self.headers.get('X-Owner-ID','').strip()
+            cid=self.path.split('/')[2]; owner=self.request_owner()
+            if not owner: return self.sendj(403,{'error':'owner_forbidden'})
             return self.sendj(200,self.factory.character_profile(owner,cid))
         if self.path.startswith('/jobs/'):
             job=self.factory.get_job(self.path.split('/')[-1])
-            return self.sendj(200,job) if job else self.sendj(404,{'error':'job_not_found'})
+            if not job: return self.sendj(404,{'error':'job_not_found'})
+            if not self.require_owner(job.get('owner_id')): return
+            return self.sendj(200,job)
         self.sendj(404,{'error':'not_found'})
     def do_POST(self):
         if not self.require_auth(): return
@@ -270,28 +283,39 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLower
                 return self.sendj(413,{'error':'payload_too_large','message':'request body exceeds 1 MiB'})
             data=json.loads(self.rfile.read(n) or '{}')
             if p=='/video/jobs':
+                if not self.require_owner(data.get('owner_id')): return
                 job=self.video_combain.create_job(data['owner_id'],data['character_id'],data.get('source_content_id'),data.get('source_asset_ids'),data.get('brief'),data.get('engine','test-manifest'))
                 return self.sendj(202,job)
             if p=='/video/from-content':
+                if not self.require_owner(data.get('owner_id')): return
                 job=self.video_combain.create_job_from_content(data['owner_id'],data['content_id'],data.get('brief'),data.get('engine','test-manifest'))
                 return self.sendj(202,job)
             if p=='/video/from-latest-content':
+                if not self.require_owner(data.get('owner_id')): return
                 job=self.video_combain.create_job_from_latest_content(data['owner_id'],data['character_id'],data.get('brief'),data.get('engine','test-manifest'))
                 return self.sendj(202,job)
             if p.startswith('/video/jobs/') and p.endswith('/run'):
-                vid=p.split('/')[3]
+                vid=p.split('/')[3]; job=self.video_combain.get_job(vid)
+                if not job: return self.sendj(404,{'error':'video_job_not_found'})
+                if not self.require_owner(job.get('owner_id')): return
                 return self.sendj(200,self.video_combain.run_job(vid))
             if p=='/owners': return self.sendj(201,{'owner_id':f.owner()})
             if p.startswith('/characters/') and p.endswith('/preferences'):
                 cid=p.split('/')[2]
+                if not self.require_owner(data.get('owner_id')): return
                 return self.sendj(200,f.update_character_preferences(data['owner_id'],cid,data.get('patch',data)))
             if p.startswith('/characters/') and p.endswith('/randomize-dna'):
                 cid=p.split('/')[2]
+                if not self.require_owner(data.get('owner_id')): return
                 return self.sendj(200,f.randomize_character_dna(data['owner_id'],cid,data.get('seed')))
             if p=='/characters':
+                if not self.require_owner(data.get('owner_id')): return
                 cid=f.create_character(data['owner_id'],data['name'],data.get('card')); return self.sendj(201,{'character_id':cid})
-            if p=='/cycle': return self.sendj(200,f.autonomous_cycle(data['owner_id'],data['character_id'],data.get('platform','local-test')))
+            if p=='/cycle':
+                if not self.require_owner(data.get('owner_id')): return
+                return self.sendj(200,f.autonomous_cycle(data['owner_id'],data['character_id'],data.get('platform','local-test')))
             if p=='/jobs':
+                if not self.require_owner(data.get('owner_id')): return
                 payload={'character_id':data['character_id'],'platform':data.get('platform','local-test'),'max_attempts':data.get('max_attempts',3)}
                 jid=f.enqueue_job(data['owner_id'],'AUTONOMOUS_CYCLE',payload,data.get('idempotency_key'))
                 return self.sendj(202,{'job_id':jid,'status':'QUEUED'})
