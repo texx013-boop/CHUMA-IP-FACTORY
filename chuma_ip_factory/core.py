@@ -229,7 +229,9 @@ class CHUMA:
         if not character: raise AuthorizationError()
         assets=self.store.q("SELECT * FROM assets WHERE character_id=? AND owner_id=? AND status='APPROVED' ORDER BY created_at",(cid,owner))
         idea=idea or {'mechanic':'identity_discovery','hook':'visual curiosity'}
-        brief={'character_id':cid,'character_name':character['name'],'mechanic':idea.get('mechanic'),'hook':idea.get('hook'),'format':'portrait_social','identity_lock':True,'reuse_policy':'prefer_approved_assets'}
+        character_row=self.store.one('SELECT card_json FROM characters WHERE character_id=? AND owner_id=?',(cid,owner))
+        dna=json.loads(character_row['card_json'] or '{}') if character_row else {}
+        brief={'character_id':cid,'character_name':character['name'],'mechanic':idea.get('mechanic'),'hook':idea.get('hook'),'format':'portrait_social','identity_lock':True,'reuse_policy':'prefer_approved_assets','character_dna':dna,'reference_asset_ids':[a['asset_id'] for a in assets if json.loads(a.get('meta_json','{}') or '{}').get('role')=='character_reference']}
         content_id=uid('CNT'); t=now(); chosen=[a['asset_id'] for a in assets[:2]]
         if not chosen: chosen=[self._generate_asset(owner,cid,'TARGETED',{'reason':'content_gap'},brief=brief,content_id=content_id)]
         brief_id=uid('BRF'); production={'mode':'ASSEMBLY','asset_ids':chosen,'variants':['1:1','4:5','9:16'],'brief_id':brief_id}
