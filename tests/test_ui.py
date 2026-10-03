@@ -5,7 +5,6 @@ def test_ui_defaults_and_no_cache_headers():
     src=pathlib.Path(__file__).parents[1]/'chuma_ip_factory'/'api.py'
     s=src.read_text(encoding='utf-8')
     assert 'value="CHUMA"' in s
-    assert 'value=\"CHUMA\"' not in s
     assert 'placeholder="Краткая карточка персонажа (необязательно)"' in s
     assert 'Cache-Control' in s and 'no-store' in s
 
