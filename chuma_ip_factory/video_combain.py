@@ -121,8 +121,16 @@ class HTTPVideoEngine:
                 url = payload.get("video_url")
                 if url:
                     _validate_external_http_url(url)
-                    download_req = urllib.request.Request(url, headers={"User-Agent": "SHUMA.SPACE/1.0"})
-                    with urllib.request.urlopen(download_req, timeout=self.timeout) as response:
+                    # Do not follow redirects for provider-returned media URLs.
+                    # A validated public URL must not be allowed to redirect into
+                    # a private/link-local address after the DNS check.
+                    class _NoRedirect(urllib.request.HTTPRedirectHandler):
+                        def redirect_request(self, req, fp, code, msg, headers, newurl):
+                            raise RuntimeError("video_provider_redirect_blocked")
+                    opener = urllib.request.build_opener(_NoRedirect)
+                    download_req = urllib.request.Request(
+                        url, headers={"User-Agent": "SHUMA.SPACE/1.0"})
+                    with opener.open(download_req, timeout=self.timeout) as response:
                         data = response.read(self.max_output_bytes + 1)
                     if len(data) > self.max_output_bytes:
                         raise RuntimeError("video_provider_output_too_large")
@@ -219,6 +227,10 @@ class VideoCombain:
             if not content_row or content_row["character_id"] != character_id:
                 raise ValueError("content_not_found")
         asset_ids = list(source_asset_ids or [])
+        if len(asset_ids) > 32 or len(set(asset_ids)) != len(asset_ids):
+            raise ValueError("source_asset_ids_invalid")
+        if any(not isinstance(aid, str) or len(aid) > 128 for aid in asset_ids):
+            raise ValueError("source_asset_ids_invalid")
         if asset_ids:
             placeholders = ",".join("?" for _ in asset_ids)
             rows = self.store.q(
@@ -237,10 +249,14 @@ class VideoCombain:
                     raise ValueError("source_asset_mismatch")
         job_id = _uid("VJOB")
         now = int(time.time())
+        if brief is not None and not isinstance(brief, dict):
+            raise ValueError("brief_invalid")
         payload = {"format": "9:16", "duration_seconds": 8, "fps": 24,
                    "style": "character-consistent", "source_content_id": source_content_id,
                    "source_asset_ids": asset_ids, **(brief or {})}
         brief_json = json.dumps(payload, ensure_ascii=False, sort_keys=True)
+        if len(brief_json.encode("utf-8")) > 256 * 1024:
+            raise ValueError("brief_too_large")
         # Image-content jobs are idempotent: repeated factory triggers reuse the
         # active/successful job for the same source, engine and rendering brief.
         if source_content_id:
@@ -371,8 +387,13 @@ class VideoCombain:
                              {"artifact_id": artifact_id, "engine": row["engine"], "kind": kind})
             return self.get_job(video_job_id)
         except Exception as exc:
+            error_code = str(exc).strip()
+            if (not error_code or len(error_code) > 160 or
+                    "Traceback" in error_code or "Errno" in error_code or
+                    "/" in error_code or "\\" in error_code):
+                error_code = "video_job_failed"
             self.store.db.execute("UPDATE video_jobs SET status=?,error=?,updated_at=? WHERE video_job_id=?",
-                                  ("FAILED", str(exc), int(time.time()), video_job_id))
+                                  ("FAILED", error_code, int(time.time()), video_job_id))
             self.store.commit()
             raise
 
