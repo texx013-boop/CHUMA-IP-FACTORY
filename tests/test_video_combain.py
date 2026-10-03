@@ -1,4 +1,5 @@
 import json
+import hashlib
 import tempfile
 from pathlib import Path
 
@@ -440,5 +441,61 @@ def test_video_combain_rejects_foreign_provenance_inputs():
         assert False, "foreign provenance was accepted"
     except ValueError as exc:
         assert str(exc) == "content_not_found"
+    factory.store.close()
+    d.cleanup()
+
+
+
+def test_video_combain_rejects_missing_source_artifact_file_before_render():
+    d = tempfile.TemporaryDirectory()
+    factory = CHUMA(Path(d.name) / "db.sqlite", Path(d.name) / "media")
+    owner = factory.owner()
+    character_id = factory.create_character(owner, "Missing Source")
+    factory.initialize_character(owner, character_id)
+    content_id = factory.create_content(owner, character_id)
+    factory.qc(owner, content_id)
+    artifact = factory.store.one(
+        "SELECT artifact_id,storage_path FROM artifacts WHERE owner_id=? AND content_id=? AND status='READY' LIMIT 1",
+        (owner, content_id),
+    )
+    video = VideoCombain(factory)
+    job = video.create_job(owner, character_id, source_content_id=content_id, source_asset_ids=[artifact["artifact_id"]])
+    Path(artifact["storage_path"]).unlink()
+    try:
+        video.run_job(job["video_job_id"])
+        assert False, "missing source artifact was rendered"
+    except RuntimeError as exc:
+        assert str(exc) == "source_asset_file_not_found"
+    failed = video.get_job(job["video_job_id"])
+    assert failed["status"] == "FAILED"
+    assert failed["error"] == "source_asset_file_not_found"
+    factory.store.close()
+    d.cleanup()
+
+
+def test_video_combain_rejects_mutated_source_content_before_render():
+    d = tempfile.TemporaryDirectory()
+    factory = CHUMA(Path(d.name) / "db.sqlite", Path(d.name) / "media")
+    owner = factory.owner()
+    character_id = factory.create_character(owner, "Mutated Content")
+    factory.initialize_character(owner, character_id)
+    content_id = factory.create_content(owner, character_id)
+    factory.qc(owner, content_id)
+    artifact = factory.store.one(
+        "SELECT artifact_id FROM artifacts WHERE owner_id=? AND content_id=? AND status='READY' LIMIT 1",
+        (owner, content_id),
+    )
+    video = VideoCombain(factory)
+    job = video.create_job(owner, character_id, source_content_id=content_id, source_asset_ids=[artifact["artifact_id"]])
+    factory.store.db.execute("UPDATE content SET character_id=? WHERE content_id=?", (factory.create_character(owner, "Wrong Content Character"), content_id))
+    factory.store.commit()
+    try:
+        video.run_job(job["video_job_id"])
+        assert False, "mutated source content was rendered"
+    except RuntimeError as exc:
+        assert str(exc) == "content_not_found"
+    failed = video.get_job(job["video_job_id"])
+    assert failed["status"] == "FAILED"
+    assert failed["error"] == "content_not_found"
     factory.store.close()
     d.cleanup()
