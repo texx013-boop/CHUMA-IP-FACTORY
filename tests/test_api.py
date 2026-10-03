@@ -377,7 +377,6 @@ def test_video_job_listing_supports_owner_scoped_character_filter():
     other_cid = factory.create_character(other, "Filter B")
     job = VideoCombain(factory).create_job(owner, cid)
     previous_factory, previous_token, previous_video = API.factory, API.admin_token, getattr(API, 'video_combain', None)
-    from chuma_ip_factory.video_combain import VideoCombain
     API.factory, API.admin_token, API.video_combain = factory, "secret", VideoCombain(factory)
     server = HTTPServer(("127.0.0.1", 0), API)
     threading.Thread(target=server.serve_forever, daemon=True).start()
@@ -414,7 +413,6 @@ def test_video_job_listing_is_scoped_to_owner():
     cid = factory.create_character(owner, "Video Scoped")
     job = VideoCombain(factory).create_job(owner, cid)
     previous_factory, previous_token, previous_video = API.factory, API.admin_token, getattr(API, 'video_combain', None)
-    from chuma_ip_factory.video_combain import VideoCombain
     API.factory, API.admin_token, API.video_combain = factory, "secret", VideoCombain(factory)
     server = HTTPServer(("127.0.0.1", 0), API)
     threading.Thread(target=server.serve_forever, daemon=True).start()
@@ -444,7 +442,6 @@ def test_video_status_is_safe_to_expose():
     d = tempfile.TemporaryDirectory()
     factory = CHUMA(Path(d.name) / "db.sqlite", Path(d.name) / "media")
     previous_factory, previous_token, previous_video = API.factory, API.admin_token, getattr(API, "video_combain", None)
-    from chuma_ip_factory.video_combain import VideoCombain
     API.factory, API.admin_token, API.video_combain = factory, "secret", VideoCombain(factory)
     server = HTTPServer(("127.0.0.1", 0), API)
     threading.Thread(target=server.serve_forever, daemon=True).start()
