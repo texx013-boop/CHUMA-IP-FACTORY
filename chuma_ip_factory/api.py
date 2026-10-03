@@ -65,6 +65,7 @@ pre{margin:0;background:#090b0e;border:1px solid var(--line);padding:14px;border
     <button onclick="scrollToId('profile-card')"><span>◎</span>&nbsp; <span>Мой профиль</span></button>
     <button onclick="scrollToId('character-card')"><span>◇</span>&nbsp; <span>Персонаж</span></button>
     <button onclick="scrollToId('gallery-card')"><span>▧</span>&nbsp; <span>Мой контент</span></button>
+    <button onclick="scrollToId('dna-card')"><span>✦</span>&nbsp; <span>ДНК и голос</span></button>
     <button onclick="scrollToId('state-card')"><span>◌</span>&nbsp; <span>Система</span></button>
   </nav>
   <div class="side-bottom"><div class="muted" style="font-size:11px;padding:0 4px">IP FACTORY · <span id="app-version">…</span></div><button onclick="setToken()">Токен доступа</button><button onclick="resetLocal()">Сбросить сессию</button></div>
@@ -115,6 +116,19 @@ pre{margin:0;background:#090b0e;border:1px solid var(--line);padding:14px;border
     </div>
   </section>
 
+  <section class="card" id="dna-card" style="margin-top:18px">
+    <div class="card-head"><div><h2>Характер и голос</h2><div class="card-sub">Ты можешь влиять на персонажа — или полностью доверить ДНК фабрике</div></div><span class="eyebrow">DNA / VOICE</span></div>
+    <div class="action-row">
+      <button class="action" onclick="randomDNA()"><strong>🎲 Создать ДНК случайно</strong><span>Характер, энергия, юмор и фирменный жест</span></button>
+      <button class="action" onclick="saveDNA()"><strong>✎ Задать свою ДНК</strong><span>Опиши персонажа своими словами</span></button>
+    </div>
+    <div class="field" style="margin-top:14px"><label>Моя ДНК / влияние</label><textarea id="dna-notes" rows="3" placeholder="Например: спокойный, дерзкий, ироничный, любит чёрный юмор…"></textarea></div>
+    <div class="field"><label>Голос</label><select id="voice-mode" style="width:100%;background:#0d1015;color:#f2f4f8;border:1px solid #2a2f39;border-radius:10px;padding:11px 12px"><option value="synthetic">Придумать голос</option><option value="user">Использовать мой голос</option></select></div>
+    <div class="field"><label>Описание голоса</label><input id="voice-description" placeholder="Низкий, спокойный, чуть хриплый, уверенный…"></div>
+    <div class="field"><label>Файл моего голоса (необязательно)</label><input id="voice-file" type="file" accept="audio/*"></div>
+    <button class="primary" onclick="saveDNA()">Сохранить влияние</button><div id="dna-status" class="muted" style="margin-top:10px"></div>
+  </section>
+
   <section class="card" style="margin-top:18px">
     <div class="card-head"><div><h2>Производство</h2><div class="card-sub">Автономный production loop</div></div><span class="eyebrow">03</span></div>
     <div class="action-row">
@@ -155,10 +169,13 @@ catch(e){console.warn('hydrate',e)}}
 function previewReference(){const f=$('reference').files[0];if(!f)return;const u=URL.createObjectURL(f);$('reference_preview').innerHTML='<img src="'+u+'">';$('reference_preview').classList.remove('hidden')}
 async function uploadReference(){if(!owner||!character)return toast('Сначала создай владельца и персонажа','err');const file=$('reference').files[0];if(!file)return toast('Выбери изображение','err');try{let r=await fetch('/characters/'+character+'/reference',{method:'POST',headers:{'Content-Type':file.type,'X-Owner-ID':owner,'X-Filename':file.name,...(localStorage.chuma_token?{'Authorization':'Bearer '+localStorage.chuma_token}:{})},body:file});let x=await r.json();if(!r.ok)throw new Error(x.message||x.error||r.status);$('reference_status').innerHTML='<span class="ok">✓ Референс сохранён</span>';await status();await gallery()}catch(e){$('reference_status').textContent='Ошибка: '+e.message}}
 async function createCharacter(){if(!owner)return toast('Сначала создай владельца','err');try{let card=$('card').value?{description:$('card').value}:undefined;let x=await j('/characters',{method:'POST',body:JSON.stringify({owner_id:owner,name:$('name').value||'CHUMA',card})});character=x.character_id;localStorage.chuma_character=character;$('metric-name').textContent=$('name').value||'CHUMA';show();toast('Персонаж создан');await status()}catch(e){toast(e.message,'err')}}
+async function saveDNA(){if(!owner||!character)return toast('Сначала создай персонажа','err');try{const voiceFile=$('voice-file').files[0];const voice={source:$('voice-mode').value,description:$('voice-description').value||'',file_name:voiceFile?voiceFile.name:null};const x=await j('/characters/'+character+'/preferences',{method:'POST',body:JSON.stringify({owner_id:owner,patch:{dna_notes:$('dna-notes').value||'',voice}})});$('dna-status').innerHTML='<span class="ok">✓ Влияние сохранено · версия '+x.version+'</span>';toast('Персонаж обновлён')}catch(e){toast(e.message,'err')}}
+async function randomDNA(){if(!owner||!character)return toast('Сначала создай персонажа','err');try{const x=await j('/characters/'+character+'/randomize-dna',{method:'POST',body:JSON.stringify({owner_id:owner})});const d=(x.card||{}).user_controls?.random_dna||{};$('dna-notes').value=Object.entries(d).map(([k,v])=>k+': '+v).join(', ');$('dna-status').innerHTML='<span class="ok">✓ Новая ДНК создана случайно</span>';toast('🎲 Новая ДНК готова')}catch(e){toast(e.message,'err')}}
+async function loadDNA(){if(!owner||!character)return;try{const x=await j('/characters/'+character+'/profile',{headers:{'X-Owner-ID':owner}});const c=x.card||{},u=c.user_controls||{},v=c.voice_profile||u.voice||{};$('dna-notes').value=u.dna_notes||'';if(v.source)$('voice-mode').value=v.source;$('voice-description').value=v.description||'';const d=u.random_dna||{};if(!$('dna-notes').value&&Object.keys(d).length)$('dna-notes').value=Object.entries(d).map(([k,val])=>k+': '+val).join(', ')}catch(e){}}
 async function cycle(){if(!owner||!character)return toast('Сначала создай владельца и персонажа','err');try{let x=await j('/jobs',{method:'POST',body:JSON.stringify({owner_id:owner,character_id:character,platform:'local-test'})});$('result').innerHTML='<pre>⚡ Производство запущено · '+x.job_id+'</pre>';toast('Цикл производства запущен');let id=x.job_id;let timer=setInterval(async()=>{try{let job=await j('/jobs/'+id);$('result').innerHTML='<pre>'+JSON.stringify(job,null,2)+'</pre>';if(['SUCCEEDED','DEAD_LETTER'].includes(job.status)){clearInterval(timer);toast(job.status==='SUCCEEDED'?'Цикл завершён':'Цикл завершился с ошибкой',job.status==='SUCCEEDED'?'ok':'err');await status();await gallery()}}catch(e){clearInterval(timer);$('result').textContent=e.message}},1500)}catch(e){toast(e.message,'err')}}\nasync function autoRecover(){try{let s=await j('/status/'+owner);let jobs=s.jobs_detail||[];let hasRef=(s.artifacts_detail||[]).some(a=>a.character_id===character&&a.variant==='reference');if(!hasRef)return;let failed=jobs.find(job=>job.status==='DEAD_LETTER'&&String(job.error||'').includes('402'));if(!failed)return;let x=await j('/jobs',{method:'POST',body:JSON.stringify({owner_id:owner,character_id:character,platform:'local-test',idempotency_key:'recovery-'+failed.job_id})});$('result').innerHTML='<pre>Автовосстановление запущено · '+x.job_id+'</pre>';let id=x.job_id;let timer=setInterval(async()=>{try{let job=await j('/jobs/'+id);$('result').innerHTML='<pre>'+JSON.stringify(job,null,2)+'</pre>';if(['SUCCEEDED','DEAD_LETTER'].includes(job.status)){clearInterval(timer);await status();await gallery()}}catch(e){clearInterval(timer)}},1500)}catch(e){console.warn('autoRecover',e)}}
 async function gallery(){if(!owner)return;try{let r=await j('/status/'+owner);if(!r.artifacts_detail.length){$('gallery').innerHTML='<div class="empty">Изображения появятся здесь после производства.</div>';return}let token=localStorage.chuma_token;$('gallery').innerHTML='';const items=[...r.artifacts_detail].sort((a,b)=>String(b.created_at||'').localeCompare(String(a.created_at||'')));for(const a of items){let tile=document.createElement('div');tile.className='tile';let img=document.createElement('img');img.loading='lazy';try{let rr=await fetch('/artifacts/'+a.artifact_id,{headers:token?{Authorization:'Bearer '+token}:{}});let blob=await rr.blob();img.src=URL.createObjectURL(blob)}catch(e){}tile.appendChild(img);let meta=document.createElement('div');meta.className='tile-meta';meta.textContent=a.variant+' · '+a.provider+' · '+a.status;tile.appendChild(meta);$('gallery').appendChild(tile)}}catch(e){$('gallery').innerHTML='<div class="empty">'+e.message+'</div>'}}
 async function status(){if(!owner)return;$("status").textContent='Загрузка…';try{let x=await j('/status/'+owner);$('profile-content').textContent=(x.artifacts_detail||[]).length;const hasRef=(x.artifacts_detail||[]).some(a=>a.character_id===character&&a.variant==='reference');$('profile-reference').textContent=hasRef?'✓ Референс подключён':'Референс не добавлен';$("status").textContent=JSON.stringify(x,null,2);const jobs=x.jobs_detail||[];const active=jobs.find(q=>['QUEUED','RUNNING'].includes(q.status));const hb=$('health-badge'),jb=$('job-badge');hb.textContent='● SYSTEM READY';hb.style.color='var(--accent)';hb.style.borderColor='rgba(200,255,53,.25)';jb.textContent=active?('● '+active.status):'● NO ACTIVE JOB';jb.style.color=active?'var(--accent2)':'#8992a4';if(active){$('result').innerHTML='<pre>⚙ Фабрика работает · '+active.job_id+'</pre>'}}catch(e){$("status").textContent=e.message;$('health-badge').textContent='● SYSTEM ERROR';$('health-badge').style.color='var(--danger)'}}
-document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();scrollToId('overview');document.querySelector('.top-title')?.focus()}});show();boot();setInterval(()=>{if(owner)status().catch(()=>{})},8000);
+document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();scrollToId('overview');document.querySelector('.top-title')?.focus()}});show();boot();loadDNA();setInterval(()=>{if(owner)status().catch(()=>{})},8000);
 </script>
 </body>
 </html>"""
@@ -198,6 +215,9 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLower
             return self.sendj(200,{'owners':out})
         if self.path.startswith('/status/'):
             return self.sendj(200,self.factory.status(self.path.split('/')[-1]))
+        if self.path.startswith('/characters/') and self.path.endswith('/profile'):
+            cid=self.path.split('/')[2]; owner=self.headers.get('X-Owner-ID','').strip()
+            return self.sendj(200,self.factory.character_profile(owner,cid))
         if self.path.startswith('/jobs/'):
             job=self.factory.get_job(self.path.split('/')[-1])
             return self.sendj(200,job) if job else self.sendj(404,{'error':'job_not_found'})
@@ -222,6 +242,12 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLower
                 return self.sendj(413,{'error':'payload_too_large','message':'request body exceeds 1 MiB'})
             data=json.loads(self.rfile.read(n) or '{}')
             if p=='/owners': return self.sendj(201,{'owner_id':f.owner()})
+            if p.startswith('/characters/') and p.endswith('/preferences'):
+                cid=p.split('/')[2]
+                return self.sendj(200,f.update_character_preferences(data['owner_id'],cid,data.get('patch',data)))
+            if p.startswith('/characters/') and p.endswith('/randomize-dna'):
+                cid=p.split('/')[2]
+                return self.sendj(200,f.randomize_character_dna(data['owner_id'],cid,data.get('seed')))
             if p=='/characters':
                 cid=f.create_character(data['owner_id'],data['name'],data.get('card')); return self.sendj(201,{'character_id':cid})
             if p=='/cycle': return self.sendj(200,f.autonomous_cycle(data['owner_id'],data['character_id'],data.get('platform','local-test')))
