@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import hmac
 import json
 import time
 import urllib.error
@@ -255,19 +256,30 @@ class VideoCombain:
             return
         placeholders = ",".join("?" for _ in asset_ids)
         rows = self.store.q(
-            f"SELECT artifact_id,owner_id,character_id,content_id,status FROM artifacts "
-            f"WHERE artifact_id IN ({placeholders})",
+            f"SELECT artifact_id,owner_id,character_id,content_id,status,storage_path,content_hash "
+            f"FROM artifacts WHERE artifact_id IN ({placeholders})",
             tuple(asset_ids),
         )
         by_id = {r["artifact_id"]: r for r in rows}
         if len(by_id) != len(set(asset_ids)):
             raise RuntimeError("source_asset_not_found")
+        root = Path(self.factory.asset_root).resolve()
         for aid in asset_ids:
             r = by_id[aid]
             if r["owner_id"] != owner_id or r["character_id"] != character_id or r["status"] != "READY":
                 raise RuntimeError("source_asset_forbidden")
             if source_content_id and r["content_id"] != source_content_id:
                 raise RuntimeError("source_asset_mismatch")
+            path = Path(r["storage_path"]).resolve()
+            if root not in path.parents:
+                raise RuntimeError("source_asset_path_forbidden")
+            try:
+                data = path.read_bytes()
+            except FileNotFoundError as exc:
+                raise RuntimeError("source_asset_file_not_found") from exc
+            digest = hashlib.sha256(data).hexdigest()
+            if not r["content_hash"] or not hmac.compare_digest(digest, r["content_hash"]):
+                raise RuntimeError("source_asset_integrity_failed")
 
     def run_job(self, video_job_id: str) -> dict[str, Any]:
         row = self.store.one("SELECT * FROM video_jobs WHERE video_job_id=?", (video_job_id,))
