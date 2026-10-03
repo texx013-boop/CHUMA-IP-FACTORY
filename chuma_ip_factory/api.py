@@ -266,6 +266,9 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLower
             if p=='/video/jobs':
                 job=self.video_combain.create_job(data['owner_id'],data['character_id'],data.get('source_content_id'),data.get('source_asset_ids'),data.get('brief'),data.get('engine','test-manifest'))
                 return self.sendj(202,job)
+            if p=='/video/from-content':
+                job=self.video_combain.create_job_from_content(data['owner_id'],data['content_id'],data.get('brief'),data.get('engine','test-manifest'))
+                return self.sendj(202,job)
             if p.startswith('/video/jobs/') and p.endswith('/run'):
                 vid=p.split('/')[3]
                 return self.sendj(200,self.video_combain.run_job(vid))
