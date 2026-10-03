@@ -94,3 +94,72 @@ def test_paid_video_generation_is_blocked_in_free_mode():
         assert False, "metered generation was not blocked"
     except PaidGenerationBlocked:
         pass
+
+def test_video_combain_can_build_job_from_latest_ready_image_content():
+    d = tempfile.TemporaryDirectory()
+    factory = CHUMA(Path(d.name) / "db.sqlite", Path(d.name) / "media")
+    owner = factory.owner()
+    character_id = factory.create_character(owner, "Content Source")
+    content_id = "CONTENT-READY"
+    asset_id = "ASSET-READY"
+    artifact_id = "ART-READY"
+    source = Path(d.name) / "media" / "source.json"
+    source.parent.mkdir(parents=True, exist_ok=True)
+    source.write_bytes(b"{}")
+    digest = __import__("hashlib").sha256(b"{}").hexdigest()
+    now = __import__("time").time_ns() // 1_000_000_000
+    factory.store.db.execute(
+        "INSERT INTO content VALUES(?,?,?,?,?,?,?,?,?)",
+        (content_id, owner, character_id, "{}", "READY",
+         __import__("json").dumps({"asset_ids": [asset_id]}),
+         __import__("json").dumps({"character_id": character_id, "asset_ids": [asset_id]}),
+         now, now),
+    )
+    factory.store.db.execute(
+        "INSERT INTO assets VALUES(?,?,?,?,?,?,?,?)",
+        (asset_id, owner, character_id, "TARGETED", "APPROVED", "{}", digest, now),
+    )
+    factory.store.db.execute(
+        "INSERT INTO artifacts VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+        (artifact_id, owner, character_id, content_id, asset_id, "9:16",
+         "application/json", str(source), digest, "test-manifest", "READY", now),
+    )
+    factory.store.commit()
+    video = VideoCombain(factory)
+    job = video.create_job_from_latest_content(owner, character_id)
+    assert job["source_content_id"] == content_id
+    assert job["source_asset_ids"] == [artifact_id]
+    done = video.run_job(job["video_job_id"])
+    assert done["status"] == "SUCCEEDED"
+    factory.store.close()
+    d.cleanup()
+
+
+def test_video_http_download_output_limit():
+    from unittest.mock import patch
+    from chuma_ip_factory import video_combain as module
+
+    class Response:
+        def __enter__(self):
+            return self
+        def __exit__(self, exc_type, exc, tb):
+            return False
+        def read(self, size=-1):
+            return b"x" * (size if size > 0 else 10)
+
+    engine = HTTPVideoEngine("https://example.invalid", "token", max_output_bytes=16)
+    payload = {"video_url": "https://cdn.invalid/video.mp4"}
+    class ApiResponse:
+        def __enter__(self):
+            return self
+        def __exit__(self, exc_type, exc, tb):
+            return False
+        def read(self):
+            return __import__("json").dumps(payload).encode()
+
+    with patch.object(module.urllib.request, "urlopen", side_effect=[ApiResponse(), Response()]):
+        try:
+            engine.render({"test": True})
+            assert False, "oversized video output was accepted"
+        except RuntimeError as exc:
+            assert str(exc) == "video_provider_output_too_large"
