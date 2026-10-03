@@ -461,3 +461,27 @@ def test_video_status_is_safe_to_expose():
         server.shutdown(); server.server_close()
         API.factory, API.admin_token, API.video_combain = previous_factory, previous_token, previous_video
         factory.store.close(); d.cleanup()
+
+
+
+def test_video_job_get_ignores_query_string_without_changing_identity():
+    d = tempfile.TemporaryDirectory()
+    factory = CHUMA(Path(d.name) / "db.sqlite", Path(d.name) / "media")
+    owner = factory.owner()
+    character_id = factory.create_character(owner, "Query Job")
+    factory.initialize_character(owner, character_id)
+    video = VideoCombain(factory)
+    job = video.create_job(owner, character_id)
+    previous_factory, previous_token, previous_video = API.factory, API.admin_token, getattr(API, "video_combain", None)
+    API.factory, API.admin_token, API.video_combain = factory, "secret", video
+    server = HTTPServer(("127.0.0.1", 0), API)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        req = urllib.request.Request(f"http://127.0.0.1:{server.server_port}/video/jobs/{job['video_job_id']}?view=compact", headers={"Authorization": "Bearer secret", "X-Owner-ID": owner})
+        with urllib.request.urlopen(req, timeout=5) as response:
+            payload = json.loads(response.read().decode())
+            assert payload["video_job_id"] == job["video_job_id"]
+    finally:
+        server.shutdown(); server.server_close()
+        API.factory, API.admin_token, API.video_combain = previous_factory, previous_token, previous_video
+        factory.store.close(); d.cleanup()
