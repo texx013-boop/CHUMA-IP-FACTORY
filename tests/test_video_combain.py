@@ -203,6 +203,32 @@ def test_video_http_provider_response_limit():
             assert str(exc) == "video_provider_response_too_large"
 
 
+def test_video_combain_jobs_survive_restart():
+    d = tempfile.TemporaryDirectory()
+    db = Path(d.name) / "db.sqlite"
+    media = Path(d.name) / "media"
+    factory = CHUMA(db, media)
+    owner = factory.owner()
+    character_id = factory.create_character(owner, "Restart Video")
+    video = VideoCombain(factory)
+    job = video.create_job(owner, character_id, source_content_id="CONTENT-PERSIST",
+                           source_asset_ids=["ART-PERSIST"], brief={"hook": "persist"})
+    job_id = job["video_job_id"]
+    factory.store.close()
+
+    reopened = CHUMA(db, media)
+    reopened_video = VideoCombain(reopened)
+    restored = reopened_video.get_job(job_id)
+    assert restored is not None
+    assert restored["owner_id"] == owner
+    assert restored["character_id"] == character_id
+    assert restored["source_content_id"] == "CONTENT-PERSIST"
+    assert restored["source_asset_ids"] == ["ART-PERSIST"]
+    assert restored["brief"]["hook"] == "persist"
+    reopened.store.close()
+    d.cleanup()
+
+
 def test_video_combain_idempotency_lookup_index_is_created():
     d = tempfile.TemporaryDirectory()
     factory = CHUMA(Path(d.name) / "db.sqlite", Path(d.name) / "media")
