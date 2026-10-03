@@ -49,3 +49,14 @@ def test_chuma_quick_start_contract():
     assert 'Быстрый старт' in src
     assert 'async function quickStart()' in src
     assert "sort((a,b)=>String(b.created_at||'').localeCompare(String(a.created_at||'')))" in src
+
+
+def test_chuma_user_workspace_contract():
+    import pathlib
+    src=(pathlib.Path(__file__).parents[1]/'chuma_ip_factory'/'api.py').read_text(encoding='utf-8')
+    assert 'Мой профиль' in src
+    assert 'Мой контент' in src
+    assert 'profile-owner' in src
+    assert 'profile-character' in src
+    assert 'profile-content' in src
+    assert 'profile-reference' in src
