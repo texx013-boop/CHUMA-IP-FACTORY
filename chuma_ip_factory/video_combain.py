@@ -3,10 +3,9 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
-import os
 import time
-import urllib.request
 import urllib.error
+import urllib.request
 import uuid
 from pathlib import Path
 from typing import Any, Protocol
@@ -27,8 +26,6 @@ class VideoEngine(Protocol):
 
 
 class ManifestVideoEngine:
-    """Zero-cost contract engine used for tests and development."""
-
     name = "test-manifest"
     connected = True
     mode = "manifest"
@@ -38,25 +35,13 @@ class ManifestVideoEngine:
             "kind": "manifest",
             "mime_type": "application/json",
             "bytes": json.dumps(
-                {
-                    "type": "shuma_video_render_manifest",
-                    "version": 1,
-                    "request": request,
-                    "status": "READY_FOR_RENDER",
-                },
-                ensure_ascii=False,
-                indent=2,
-            ).encode("utf-8"),
+                {"type": "shuma_video_render_manifest", "version": 1,
+                 "request": request, "status": "READY_FOR_RENDER"},
+                ensure_ascii=False, indent=2).encode("utf-8"),
         }
 
 
 class HTTPVideoEngine:
-    """Provider-neutral HTTP video renderer.
-
-    Expected response: either video_base64 + optional mime_type, or video_url.
-    The request always contains character/source provenance and the complete brief.
-    """
-
     name = "external-api"
     mode = "api"
 
@@ -73,14 +58,10 @@ class HTTPVideoEngine:
         if not self.connected:
             raise RuntimeError("video_provider_not_connected")
         req = urllib.request.Request(
-            self.endpoint,
-            data=json.dumps(request, ensure_ascii=False).encode("utf-8"),
-            headers={
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {self.api_key}",
-            },
-            method="POST",
-        )
+            self.endpoint, data=json.dumps(request, ensure_ascii=False).encode("utf-8"),
+            headers={"Content-Type": "application/json",
+                     "Authorization": f"Bearer {self.api_key}"},
+            method="POST")
         last: Exception | None = None
         for attempt in range(1, self.max_attempts + 1):
             try:
@@ -92,25 +73,17 @@ class HTTPVideoEngine:
                         data = base64.b64decode(raw, validate=True)
                     except Exception as exc:
                         raise RuntimeError("video_provider_invalid_base64") from exc
-                    return {
-                        "kind": "video",
-                        "mime_type": payload.get("mime_type", "video/mp4"),
-                        "bytes": data,
-                        "provider_response": {"keys": sorted(payload.keys()), "attempt": attempt},
-                    }
+                    return {"kind": "video", "mime_type": payload.get("mime_type", "video/mp4"),
+                            "bytes": data,
+                            "provider_response": {"keys": sorted(payload.keys()), "attempt": attempt}}
                 url = payload.get("video_url")
                 if url:
-                    download_req = urllib.request.Request(
-                        url, headers={"User-Agent": "SHUMA.SPACE/1.0"}
-                    )
+                    download_req = urllib.request.Request(url, headers={"User-Agent": "SHUMA.SPACE/1.0"})
                     with urllib.request.urlopen(download_req, timeout=self.timeout) as response:
                         data = response.read()
-                    return {
-                        "kind": "video",
-                        "mime_type": payload.get("mime_type", "video/mp4"),
-                        "bytes": data,
-                        "provider_response": {"keys": sorted(payload.keys()), "attempt": attempt},
-                    }
+                    return {"kind": "video", "mime_type": payload.get("mime_type", "video/mp4"),
+                            "bytes": data,
+                            "provider_response": {"keys": sorted(payload.keys()), "attempt": attempt}}
                 raise RuntimeError("video_provider_response_missing_video")
             except urllib.error.HTTPError as exc:
                 last = exc
@@ -126,8 +99,6 @@ class HTTPVideoEngine:
 
 
 class BudgetVideoEngine:
-    """Budget gate for video renderers; no paid call can bypass policy."""
-
     def __init__(self, provider: VideoEngine, policy: BudgetPolicy, cost_class: str = "metered"):
         self.provider = provider
         self.policy = policy
@@ -140,9 +111,8 @@ class BudgetVideoEngine:
             raise PaidGenerationBlocked("paid_generation_blocked_by_budget_policy")
         return self.provider.render(request)
 
-class VideoCombain:
-    """Provider-neutral video production boundary for SHUMA.SPACE."""
 
+class VideoCombain:
     def __init__(self, factory, video_engine: VideoEngine | None = None,
                  budget_policy: BudgetPolicy | None = None):
         self.factory = factory
@@ -156,86 +126,52 @@ class VideoCombain:
     def _ensure_schema(self):
         self.store.db.execute(
             """CREATE TABLE IF NOT EXISTS video_jobs(
-                video_job_id TEXT PRIMARY KEY,
-                owner_id TEXT NOT NULL,
-                character_id TEXT NOT NULL,
-                source_content_id TEXT,
-                source_asset_ids_json TEXT NOT NULL,
-                brief_json TEXT NOT NULL,
-                engine TEXT NOT NULL,
-                status TEXT NOT NULL,
-                output_artifact_id TEXT,
-                error TEXT,
-                created_at INTEGER NOT NULL,
-                updated_at INTEGER NOT NULL
-            )"""
-        )
+                video_job_id TEXT PRIMARY KEY, owner_id TEXT NOT NULL,
+                character_id TEXT NOT NULL, source_content_id TEXT,
+                source_asset_ids_json TEXT NOT NULL, brief_json TEXT NOT NULL,
+                engine TEXT NOT NULL, status TEXT NOT NULL,
+                output_artifact_id TEXT, error TEXT,
+                created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)""")
         self.store.commit()
 
     def engines(self) -> list[dict[str, Any]]:
         external = self.engine if getattr(self.engine, "name", "") == "external-api" else None
         return [
-            {
-                "id": "test-manifest",
-                "name": "Video Combain",
-                "connected": True,
-                "mode": "manifest",
-                "description": "Проверочный движок контракта без платного видеорендера",
-            },
-            {
-                "id": "external-api",
-                "name": "External Video Engine",
-                "connected": bool(external and getattr(external, "connected", False)),
-                "mode": "api",
-                "description": "Реальный видеорендер через внешний API",
-            },
+            {"id": "test-manifest", "name": "Video Combain", "connected": True,
+             "mode": "manifest", "description": "Проверочный движок без платного видеорендера"},
+            {"id": "external-api", "name": "External Video Engine",
+             "connected": bool(external and getattr(external, "connected", False)),
+             "mode": "api", "description": "Реальный видеорендер через внешний API"},
         ]
 
     def _selected_engine(self, engine_id: str):
         if engine_id == "test-manifest":
             return ManifestVideoEngine()
         if engine_id == "external-api":
-            if getattr(self.engine, "name", "") != "external-api":
+            if getattr(self.engine, "name", "") != "external-api" or not getattr(self.engine, "connected", False):
                 raise RuntimeError("external_video_engine_not_configured")
             return self.engine
         raise ValueError("video_engine_not_supported")
 
-    def create_job(
-        self,
-        owner_id: str,
-        character_id: str,
-        source_content_id: str | None = None,
-        source_asset_ids: list[str] | None = None,
-        brief: dict[str, Any] | None = None,
-        engine: str = "test-manifest",
-    ) -> dict[str, Any]:
-        if not self.store.one(
-            "SELECT character_id FROM characters WHERE character_id=? AND owner_id=?",
-            (character_id, owner_id),
-        ):
+    def create_job(self, owner_id: str, character_id: str,
+                   source_content_id: str | None = None,
+                   source_asset_ids: list[str] | None = None,
+                   brief: dict[str, Any] | None = None,
+                   engine: str = "test-manifest") -> dict[str, Any]:
+        if not self.store.one("SELECT character_id FROM characters WHERE character_id=? AND owner_id=?",
+                              (character_id, owner_id)):
             raise ValueError("character_not_found")
         self._selected_engine(engine)
-
         job_id = _uid("VJOB")
         now = int(time.time())
-        payload = {
-            "format": "9:16",
-            "duration_seconds": 8,
-            "fps": 24,
-            "style": "character-consistent",
-            "source_content_id": source_content_id,
-            "source_asset_ids": source_asset_ids or [],
-            **(brief or {}),
-        }
+        payload = {"format": "9:16", "duration_seconds": 8, "fps": 24,
+                   "style": "character-consistent", "source_content_id": source_content_id,
+                   "source_asset_ids": source_asset_ids or [], **(brief or {})}
         self.store.db.execute(
             "INSERT INTO video_jobs VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
-            (
-                job_id, owner_id, character_id, source_content_id,
-                json.dumps(source_asset_ids or [], ensure_ascii=False),
-                json.dumps(payload, ensure_ascii=False), engine, "QUEUED",
-                None, None, now, now,
-            ),
-        )
+            (job_id, owner_id, character_id, source_content_id,
+             json.dumps(source_asset_ids or [], ensure_ascii=False),
+             json.dumps(payload, ensure_ascii=False), engine, "QUEUED", None, None, now, now))
         self.store.commit()
         return self.get_job(job_id)
 
@@ -245,34 +181,25 @@ class VideoCombain:
             raise ValueError("video_job_not_found")
         if row["status"] == "SUCCEEDED":
             return self.get_job(video_job_id)
-
         now = int(time.time())
-        self.store.db.execute(
-            "UPDATE video_jobs SET status=?,updated_at=?,error=NULL WHERE video_job_id=?",
-            ("RUNNING", now, video_job_id),
-        )
+        self.store.db.execute("UPDATE video_jobs SET status=?,updated_at=?,error=NULL WHERE video_job_id=?",
+                              ("RUNNING", now, video_job_id))
         self.store.commit()
-
         try:
             brief = json.loads(row["brief_json"])
             source_assets = json.loads(row["source_asset_ids_json"])
             request = {
-                "video_job_id": video_job_id,
-                "owner_id": row["owner_id"],
-                "character_id": row["character_id"],
-                "source_content_id": row["source_content_id"],
-                "source_asset_ids": source_assets,
-                "brief": brief,
-                "provenance": {
-                    "character_id": row["character_id"],
-                    "source_content_id": row["source_content_id"],
-                    "source_asset_ids": source_assets,
-                    "factory": "SHUMA.SPACE",
-                },
-            }
+                "video_job_id": video_job_id, "owner_id": row["owner_id"],
+                "character_id": row["character_id"], "source_content_id": row["source_content_id"],
+                "source_asset_ids": source_assets, "brief": brief,
+                "provenance": {"character_id": row["character_id"],
+                               "source_content_id": row["source_content_id"],
+                               "source_asset_ids": source_assets, "factory": "SHUMA.SPACE"}}
             engine = self._selected_engine(row["engine"])
             rendered = engine.render(request)
             data = rendered["bytes"]
+            if not isinstance(data, (bytes, bytearray)) or not data:
+                raise RuntimeError("video_provider_empty_output")
             kind = rendered.get("kind", "video")
             mime_type = rendered.get("mime_type", "video/mp4")
             ext = "json" if kind == "manifest" else "mp4"
@@ -282,29 +209,19 @@ class VideoCombain:
             digest = hashlib.sha256(data).hexdigest()
             self.store.db.execute(
                 "INSERT INTO artifacts VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
-                (
-                    artifact_id, row["owner_id"], row["character_id"],
-                    row["source_content_id"], None,
-                    "video" if kind == "video" else "video-manifest",
-                    mime_type, str(path), digest,
-                    getattr(engine, "name", row["engine"]), "READY", now,
-                ),
-            )
+                (artifact_id, row["owner_id"], row["character_id"], row["source_content_id"], None,
+                 "video" if kind == "video" else "video-manifest", mime_type, str(path), digest,
+                 getattr(engine, "name", row["engine"]), "READY", now))
             self.store.db.execute(
                 "UPDATE video_jobs SET status=?,output_artifact_id=?,updated_at=? WHERE video_job_id=?",
-                ("SUCCEEDED", artifact_id, now, video_job_id),
-            )
+                ("SUCCEEDED", artifact_id, now, video_job_id))
             self.store.commit()
-            self.store.event(
-                row["owner_id"], "VIDEO_JOB_COMPLETED", "video_job", video_job_id,
-                {"artifact_id": artifact_id, "engine": row["engine"], "kind": kind},
-            )
+            self.store.event(row["owner_id"], "VIDEO_JOB_COMPLETED", "video_job", video_job_id,
+                             {"artifact_id": artifact_id, "engine": row["engine"], "kind": kind})
             return self.get_job(video_job_id)
-        except (PaidGenerationBlocked, Exception) as exc:
-            self.store.db.execute(
-                "UPDATE video_jobs SET status=?,error=?,updated_at=? WHERE video_job_id=?",
-                ("FAILED", str(exc), int(time.time()), video_job_id),
-            )
+        except Exception as exc:
+            self.store.db.execute("UPDATE video_jobs SET status=?,error=?,updated_at=? WHERE video_job_id=?",
+                                  ("FAILED", str(exc), int(time.time()), video_job_id))
             self.store.commit()
             raise
 
@@ -327,8 +244,5 @@ class VideoCombain:
         return [self.get_job(r["video_job_id"]) for r in self.store.q(sql, tuple(params))]
 
     def status(self):
-        return {
-            "engines": self.engines(),
-            "contract_version": 2,
-            "budget": self.budget_policy.describe(),
-        }
+        return {"engines": self.engines(), "contract_version": 2,
+                "budget": self.budget_policy.describe()}
