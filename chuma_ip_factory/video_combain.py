@@ -11,7 +11,7 @@ import uuid
 from pathlib import Path
 from typing import Any, Protocol
 
-from .budget import BudgetPolicy, BudgetGuardProvider, PaidGenerationBlocked
+from .budget import BudgetPolicy, PaidGenerationBlocked
 
 
 def _uid(prefix: str) -> str:
@@ -124,6 +124,21 @@ class HTTPVideoEngine:
                 time.sleep(self.retry_delay * (2 ** (attempt - 1)))
         raise last or RuntimeError("video_provider_request_failed")
 
+
+class BudgetVideoEngine:
+    """Budget gate for video renderers; no paid call can bypass policy."""
+
+    def __init__(self, provider: VideoEngine, policy: BudgetPolicy, cost_class: str = "metered"):
+        self.provider = provider
+        self.policy = policy
+        self.cost_class = cost_class
+        self.name = getattr(provider, "name", "unknown")
+        self.connected = bool(getattr(provider, "connected", False)) and policy.allows(cost_class)
+
+    def render(self, request: dict[str, Any]) -> dict[str, Any]:
+        if not self.policy.allows(self.cost_class):
+            raise PaidGenerationBlocked("paid_generation_blocked_by_budget_policy")
+        return self.provider.render(request)
 
 class VideoCombain:
     """Provider-neutral video production boundary for SHUMA.SPACE."""
