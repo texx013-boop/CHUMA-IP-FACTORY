@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 VERSION='2.5.6'
-SCHEMA_VERSION=9
+SCHEMA_VERSION=10
 
 class CHUMAError(Exception): pass
 class AuthorizationError(CHUMAError): pass
@@ -163,6 +163,23 @@ class CHUMA:
         self.store.db.execute('INSERT INTO characters VALUES(?,?,?,?,?,?,?,?,?,?)',(cid,owner,name,'BIRTH',json.dumps(card,ensure_ascii=False),json.dumps(genome),json.dumps(dna),t,t,1))
         self.store.db.execute('INSERT INTO health VALUES(?,?,?,?,?,?,?)',(cid,owner,1.0,0.0,0.0,0.0,t)); self.store.commit()
         self.store.event(owner,'CHARACTER_CREATED','CHARACTER',cid,{'name':name}); self.store.event(owner,'DISCOVERY_QUEUED','CHARACTER',cid,{'program':'image-first'}); return cid
+    def attach_reference(self,owner,cid,data,mime_type='image/jpeg',filename='reference'):
+        self._auth(owner)
+        row=self.store.one('SELECT * FROM characters WHERE character_id=? AND owner_id=?',(cid,owner))
+        if not row: raise AuthorizationError()
+        if not data or len(data) > 10*1024*1024: raise ValueError('reference_image_too_large')
+        if mime_type not in ('image/jpeg','image/png','image/webp'): raise ValueError('reference_must_be_jpeg_png_or_webp')
+        ext={'image/jpeg':'jpg','image/png':'png','image/webp':'webp'}[mime_type]
+        aid=uid('ASSET'); digest=hashlib.sha256(data).hexdigest(); path=self.asset_root/f'{aid}.{ext}'; path.write_bytes(data)
+        t=now(); meta={'role':'character_reference','filename':filename,'mime_type':mime_type,'size_bytes':len(data)}
+        self.store.db.execute('INSERT INTO assets VALUES(?,?,?,?,?,?,?,?)',(aid,owner,cid,'REFERENCE','APPROVED',json.dumps(meta,ensure_ascii=False),digest,t))
+        arid=uid('ART')
+        self.store.db.execute('INSERT INTO artifacts VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',(arid,owner,cid,None,aid,'reference',mime_type,str(path),digest,'user-upload','READY',t))
+        card=json.loads(row['card_json']); card['reference_asset_id']=aid; card['reference_artifact_id']=arid; card['reference_filename']=filename
+        self.store.db.execute('UPDATE characters SET card_json=?,updated_at=?,version=version+1 WHERE character_id=? AND owner_id=?',(json.dumps(card,ensure_ascii=False),t,cid,owner))
+        self.store.commit(); self.store.event(owner,'CHARACTER_REFERENCE_ATTACHED','ASSET',aid,{'character_id':cid,'artifact_id':arid,'mime_type':mime_type,'size_bytes':len(data)})
+        return {'asset_id':aid,'artifact_id':arid,'character_id':cid,'mime_type':mime_type,'size_bytes':len(data)}
+
     def initialize_character(self,owner,cid):
         self._auth(owner); row=self.store.one('SELECT * FROM characters WHERE character_id=? AND owner_id=?',(cid,owner))
         if not row: raise AuthorizationError()
