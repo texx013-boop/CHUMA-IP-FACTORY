@@ -37,7 +37,8 @@ if __name__ == '__main__':
 
     host = os.getenv('CHUMA_HOST', '0.0.0.0')
     port = int(os.getenv('PORT', os.getenv('CHUMA_PORT', '8097')))
-    data_dir = Path(os.getenv('CHUMA_DATA_DIR', str(APP_ROOT / 'runtime')))
+    default_data_dir = '/data' if Path('/data').exists() else str(APP_ROOT / 'runtime')
+    data_dir = Path(os.getenv('CHUMA_DATA_DIR', default_data_dir))
     data_dir.mkdir(parents=True, exist_ok=True)
     db = os.getenv('DATABASE_URL') or str(data_dir / 'chuma.db')
     media = Path(os.getenv('CHUMA_MEDIA_DIR', str(data_dir / 'media')))
