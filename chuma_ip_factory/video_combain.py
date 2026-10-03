@@ -233,6 +233,42 @@ class VideoCombain:
         self.store.commit()
         return self.get_job(job_id)
 
+    def _validate_job_provenance(self, row, source_assets: list[str]) -> None:
+        """Re-check queued provenance immediately before an external render."""
+        owner_id = row["owner_id"]
+        character_id = row["character_id"]
+        if not self.store.one(
+            "SELECT character_id FROM characters WHERE character_id=? AND owner_id=?",
+            (character_id, owner_id),
+        ):
+            raise RuntimeError("character_not_found")
+        source_content_id = row["source_content_id"]
+        if source_content_id:
+            content_row = self.store.one(
+                "SELECT character_id FROM content WHERE content_id=? AND owner_id=?",
+                (source_content_id, owner_id),
+            )
+            if not content_row or content_row["character_id"] != character_id:
+                raise RuntimeError("content_not_found")
+        asset_ids = list(source_assets or [])
+        if not asset_ids:
+            return
+        placeholders = ",".join("?" for _ in asset_ids)
+        rows = self.store.q(
+            f"SELECT artifact_id,owner_id,character_id,content_id,status FROM artifacts "
+            f"WHERE artifact_id IN ({placeholders})",
+            tuple(asset_ids),
+        )
+        by_id = {r["artifact_id"]: r for r in rows}
+        if len(by_id) != len(set(asset_ids)):
+            raise RuntimeError("source_asset_not_found")
+        for aid in asset_ids:
+            r = by_id[aid]
+            if r["owner_id"] != owner_id or r["character_id"] != character_id or r["status"] != "READY":
+                raise RuntimeError("source_asset_forbidden")
+            if source_content_id and r["content_id"] != source_content_id:
+                raise RuntimeError("source_asset_mismatch")
+
     def run_job(self, video_job_id: str) -> dict[str, Any]:
         row = self.store.one("SELECT * FROM video_jobs WHERE video_job_id=?", (video_job_id,))
         if not row:
@@ -246,6 +282,7 @@ class VideoCombain:
         try:
             brief = json.loads(row["brief_json"])
             source_assets = json.loads(row["source_asset_ids_json"])
+            self._validate_job_provenance(row, source_assets)
             request = {
                 "video_job_id": video_job_id, "owner_id": row["owner_id"],
                 "character_id": row["character_id"], "source_content_id": row["source_content_id"],
