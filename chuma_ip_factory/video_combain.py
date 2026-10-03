@@ -4,6 +4,8 @@ import base64
 import hashlib
 import hmac
 import json
+import ipaddress
+import socket
 import time
 import urllib.error
 import urllib.request
@@ -41,6 +43,36 @@ class ManifestVideoEngine:
                  "request": request, "status": "READY_FOR_RENDER"},
                 ensure_ascii=False, indent=2).encode("utf-8"),
         }
+
+
+def _validate_external_http_url(url: str) -> str:
+    """Validate provider-returned URLs before any outbound connection."""
+    parsed = urllib.parse.urlsplit(url)
+    if parsed.scheme not in ("http", "https") or not parsed.hostname or not parsed.netloc:
+        raise RuntimeError("video_provider_invalid_video_url")
+    if parsed.username or parsed.password:
+        raise RuntimeError("video_provider_invalid_video_url")
+    host = parsed.hostname.rstrip(".")
+    try:
+        port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    except ValueError as exc:
+        raise RuntimeError("video_provider_invalid_video_url") from exc
+    try:
+        infos = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+    except (socket.gaierror, OSError) as exc:
+        raise RuntimeError("video_provider_unresolvable_video_url") from exc
+    if not infos:
+        raise RuntimeError("video_provider_unresolvable_video_url")
+    for info in infos:
+        address = info[4][0]
+        try:
+            ip = ipaddress.ip_address(address)
+        except ValueError as exc:
+            raise RuntimeError("video_provider_invalid_video_url") from exc
+        if (ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast
+                or ip.is_reserved or ip.is_unspecified):
+            raise RuntimeError("video_provider_blocked_video_url")
+    return url
 
 
 class HTTPVideoEngine:
@@ -88,11 +120,7 @@ class HTTPVideoEngine:
                             "provider_response": {"keys": sorted(payload.keys()), "attempt": attempt}}
                 url = payload.get("video_url")
                 if url:
-                    parsed_url = urllib.parse.urlparse(url)
-                    if parsed_url.scheme not in ("http", "https") or not parsed_url.netloc:
-                        raise RuntimeError("video_provider_invalid_video_url")
-                    if parsed_url.username or parsed_url.password:
-                        raise RuntimeError("video_provider_invalid_video_url")
+                    _validate_external_http_url(url)
                     download_req = urllib.request.Request(url, headers={"User-Agent": "SHUMA.SPACE/1.0"})
                     with urllib.request.urlopen(download_req, timeout=self.timeout) as response:
                         data = response.read(self.max_output_bytes + 1)
