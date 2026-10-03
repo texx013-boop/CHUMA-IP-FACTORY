@@ -243,8 +243,8 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLower
                     ):
                         return self.sendj(404,{'error':'character_not_found'})
                 return self.sendj(200,{'jobs':self.video_combain.list_jobs(owner, character_id)})
-        if self.path.startswith('/video/jobs/'):
-            vid=self.path.split('/')[3]
+        if urllib.parse.urlsplit(self.path).path.startswith('/video/jobs/'):
+            vid=urllib.parse.urlsplit(self.path).path.split('/')[3]
             job=self.video_combain.get_job(vid)
             if not job: return self.sendj(404,{'error':'video_job_not_found'})
             if not self.require_owner(job.get('owner_id')): return
