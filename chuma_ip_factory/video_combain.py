@@ -231,6 +231,18 @@ class VideoCombain:
             self.store.commit()
             raise
 
+    def create_job_from_latest_content(self, owner_id: str, character_id: str,
+                                       brief: dict[str, Any] | None = None,
+                                       engine: str = "test-manifest") -> dict[str, Any]:
+        row = self.store.one(
+            "SELECT content_id FROM content WHERE owner_id=? AND character_id=? "
+            "AND status='READY' ORDER BY created_at DESC LIMIT 1",
+            (owner_id, character_id),
+        )
+        if not row:
+            raise ValueError("no_ready_image_content")
+        return self.create_job_from_content(owner_id, row["content_id"], brief, engine)
+
     def create_job_from_content(self, owner_id: str, content_id: str,
                                 brief: dict[str, Any] | None = None,
                                 engine: str = "test-manifest") -> dict[str, Any]:
