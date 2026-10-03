@@ -95,3 +95,17 @@ def test_http_health_and_auth_contract():
         API.admin_token = previous_token
         factory.store.close()
         d.cleanup()
+
+
+def test_character_controls_voice_and_random_dna():
+    import tempfile
+    d=tempfile.TemporaryDirectory()
+    factory=CHUMA(Path(d.name)/'db.sqlite',Path(d.name)/'media')
+    owner=factory.owner(); cid=factory.create_character(owner,'Control Test')
+    updated=factory.update_character_preferences(owner,cid,{'dna_notes':'спокойный, ироничный','voice':{'source':'synthetic','description':'низкий и спокойный'}})
+    assert updated['card']['user_controls']['dna_notes']=='спокойный, ироничный'
+    assert updated['card']['voice_profile']['source']=='synthetic'
+    random=factory.randomize_character_dna(owner,cid,seed=42)
+    assert random['card']['dna_mode']=='RANDOMIZED'
+    assert len(random['card']['user_controls']['random_dna'])==5
+    factory.store.close(); d.cleanup()
