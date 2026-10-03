@@ -47,7 +47,7 @@ def test_http_health_and_auth_contract():
             base + "/owners",
             data=b"{}",
             method="POST",
-            headers={"Authorization": "Bearer test-admin-token", "Content-Type": "application/json"},
+            headers={"Authorization": "Bearer test-admin-token", "Content-Type": "application/json", "X-Owner-ID": owner_id},
         )
         with urllib.request.urlopen(owner_req, timeout=5) as r:
             owner_id=json.loads(r.read().decode())["owner_id"]
@@ -68,7 +68,7 @@ def test_http_health_and_auth_contract():
         with urllib.request.urlopen(job_req, timeout=5) as r:
             assert r.status == 202
             job_id=json.loads(r.read().decode())["job_id"]
-        with urllib.request.urlopen(urllib.request.Request(base + "/jobs/"+job_id, headers={"Authorization":"Bearer test-admin-token"}), timeout=5) as r:
+        with urllib.request.urlopen(urllib.request.Request(base + "/jobs/"+job_id, headers={"Authorization":"Bearer test-admin-token","X-Owner-ID":owner_id}), timeout=5) as r:
             assert json.loads(r.read().decode())["status"] == "QUEUED"
 
         try:
@@ -81,7 +81,7 @@ def test_http_health_and_auth_contract():
             base + "/owners",
             data=b"x" * (API.MAX_BODY_BYTES + 1),
             method="POST",
-            headers={"Authorization": "Bearer test-admin-token", "Content-Type": "application/json"},
+            headers={"Authorization": "Bearer test-admin-token", "Content-Type": "application/json", "X-Owner-ID": owner_id},
         )
         try:
             urllib.request.urlopen(oversized, timeout=5)
@@ -181,3 +181,31 @@ def test_user_voice_reference_is_persisted():
     p=factory.character_profile(owner,cid)
     assert p['card']['voice_profile']['source']=='user'; assert p['card']['voice_profile']['asset_id']==r['asset_id']
     factory.store.close(); d.cleanup()
+
+
+def test_api_owner_scope_blocks_cross_owner_job_and_status():
+    d = tempfile.TemporaryDirectory()
+    factory = CHUMA(Path(d.name) / "db.sqlite", Path(d.name) / "media")
+    owner = factory.owner(); other = factory.owner()
+    cid = factory.create_character(owner, "Scoped Job")
+    jid = factory.enqueue_job(owner, "AUTONOMOUS_CYCLE", {"character_id": cid, "platform": "local-test"}, "scope-job")
+    previous_factory, previous_token = API.factory, API.admin_token
+    API.factory, API.admin_token = factory, "secret"
+    server = HTTPServer(("127.0.0.1", 0), API)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        for path in (f"/jobs/{jid}", f"/status/{owner}"):
+            req = urllib.request.Request(
+                f"http://127.0.0.1:{server.server_port}{path}",
+                headers={"Authorization":"Bearer secret","X-Owner-ID":other},
+            )
+            try:
+                urllib.request.urlopen(req, timeout=5)
+                assert False, f"cross-owner access accepted for {path}"
+            except urllib.error.HTTPError as exc:
+                assert exc.code == 403
+                assert json.loads(exc.read().decode())["error"] == "owner_forbidden"
+    finally:
+        server.shutdown(); server.server_close()
+        API.factory, API.admin_token = previous_factory, previous_token
+        factory.store.close(); d.cleanup()
