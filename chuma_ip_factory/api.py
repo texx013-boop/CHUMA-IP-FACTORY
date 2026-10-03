@@ -66,7 +66,7 @@ pre{margin:0;background:#090b0e;border:1px solid var(--line);padding:14px;border
     <button onclick="scrollToId('gallery-card')"><span>▧</span>&nbsp; <span>Контент</span></button>
     <button onclick="scrollToId('state-card')"><span>◌</span>&nbsp; <span>Система</span></button>
   </nav>
-  <div class="side-bottom"><div class="muted" style="font-size:11px;padding:0 4px">IP FACTORY · 2.5.6</div><button onclick="setToken()">Токен доступа</button><button onclick="resetLocal()">Сбросить сессию</button></div>
+  <div class="side-bottom"><div class="muted" style="font-size:11px;padding:0 4px">IP FACTORY · <span id="app-version">…</span></div><button onclick="setToken()">Токен доступа</button><button onclick="resetLocal()">Сбросить сессию</button></div>
 </aside>
 <main>
   <div class="topbar" id="overview">
@@ -126,17 +126,22 @@ let owner=localStorage.chuma_owner||'',character=localStorage.chuma_character||'
 function scrollToId(id){document.getElementById(id)?.scrollIntoView({behavior:'smooth',block:'start'})}
 function show(){if(owner)$("character").textContent="ID владельца: "+owner;if(character)$("character").textContent="ID: "+character}
 async function j(url,opt={}){opt.headers=Object.assign({'Content-Type':'application/json'},opt.headers||{});const token=localStorage.chuma_token;if(token)opt.headers.Authorization='Bearer '+token;let r=await fetch(url,opt);let x=await r.json();if(r.status===401){localStorage.removeItem('chuma_token');throw new Error('Требуется токен доступа CHUMA.')}if(!r.ok)throw new Error(x.message||x.error||r.status);return x}
-async function boot(){try{let cfg=await j('/config');if(cfg.auth_required&&!localStorage.chuma_token){let t=prompt('Введите токен доступа CHUMA:');if(t){localStorage.chuma_token=t.trim();}}let b=await j('/budget');let x=await j('/provider');$("provider").innerHTML='<span class="ok">ONLINE</span> · '+x.version+' · '+x.name+' · budget '+b.mode+(b.allow_paid?'':' · paid OFF')}catch(e){$("provider").textContent='Ошибка: '+e.message}}
+async function boot(){try{let cfg=await j('/config');if(cfg.auth_required&&!localStorage.chuma_token){let t=prompt('Введите токен доступа CHUMA:');if(t){localStorage.chuma_token=t.trim();}}let b=await j('/budget');let x=await j('/provider');$("provider").innerHTML='<span class="ok">ONLINE</span> · '+x.version+' · '+x.name+' · budget '+b.mode+(b.allow_paid?'':' · paid OFF');$("app-version").textContent=x.version;await hydrate()}catch(e){$("provider").textContent='Ошибка: '+e.message}}
 function setToken(){const t=prompt('Токен доступа CHUMA:');if(t===null)return;localStorage.chuma_token=t.trim();location.reload()}
 function resetLocal(){localStorage.removeItem('chuma_token');localStorage.removeItem('chuma_owner');localStorage.removeItem('chuma_character');owner='';character='';location.reload()}
 async function createOwner(){try{let x=await j('/owners',{method:'POST',body:'{}'});owner=x.owner_id;localStorage.chuma_owner=owner;show()}catch(e){alert(e.message)}}
+async function hydrate(){try{let r=await j('/owners');if(!r.owners.length){let x=await j('/owners',{method:'POST',body:'{}'});owner=x.owner_id;localStorage.chuma_owner=owner;return}
+let found=r.owners.find(o=>o.owner_id===owner)||r.owners[0];owner=found.owner_id;localStorage.chuma_owner=owner;
+let chars=found.characters||[];let selected=chars.find(c=>c.character_id===character)||chars.find(c=>c.name==='Леся')||chars[chars.length-1];
+if(selected){character=selected.character_id;localStorage.chuma_character=character;$('metric-name').textContent=selected.name;$('name').value=selected.name;show();}}
+catch(e){console.warn('hydrate',e)}}
 function previewReference(){const f=$('reference').files[0];if(!f)return;const u=URL.createObjectURL(f);$('reference_preview').innerHTML='<img src="'+u+'">';$('reference_preview').classList.remove('hidden')}
 async function uploadReference(){if(!owner||!character)return alert('Сначала создай владельца и персонажа.');const file=$('reference').files[0];if(!file)return alert('Выбери изображение.');try{let r=await fetch('/characters/'+character+'/reference',{method:'POST',headers:{'Content-Type':file.type,'X-Owner-ID':owner,'X-Filename':file.name,...(localStorage.chuma_token?{'Authorization':'Bearer '+localStorage.chuma_token}:{})},body:file});let x=await r.json();if(!r.ok)throw new Error(x.message||x.error||r.status);$('reference_status').innerHTML='<span class="ok">✓ Референс сохранён</span>';await status();await gallery()}catch(e){$('reference_status').textContent='Ошибка: '+e.message}}
 async function createCharacter(){if(!owner)return alert('Сначала создай владельца.');try{let card=$('card').value?{description:$('card').value}:undefined;let x=await j('/characters',{method:'POST',body:JSON.stringify({owner_id:owner,name:$('name').value||'CHUMA',card})});character=x.character_id;localStorage.chuma_character=character;$('metric-name').textContent=$('name').value||'CHUMA';show();await status()}catch(e){alert(e.message)}}
 async function cycle(){if(!owner||!character)return alert('Сначала создай владельца и персонажа.');try{let x=await j('/jobs',{method:'POST',body:JSON.stringify({owner_id:owner,character_id:character,platform:'local-test'})});$('result').innerHTML='<pre>Производство запущено · '+x.job_id+'</pre>';let id=x.job_id;let timer=setInterval(async()=>{try{let job=await j('/jobs/'+id);$('result').innerHTML='<pre>'+JSON.stringify(job,null,2)+'</pre>';if(['SUCCEEDED','DEAD_LETTER'].includes(job.status)){clearInterval(timer);await status();await gallery()}}catch(e){clearInterval(timer);$('result').textContent=e.message}},1500)}catch(e){alert(e.message)}}
 async function gallery(){if(!owner)return;try{let r=await j('/status/'+owner);if(!r.artifacts_detail.length){$('gallery').innerHTML='<div class="empty">Изображения появятся здесь после производства.</div>';return}let token=localStorage.chuma_token;$('gallery').innerHTML='';for(const a of r.artifacts_detail){let tile=document.createElement('div');tile.className='tile';let img=document.createElement('img');img.loading='lazy';try{let rr=await fetch('/artifacts/'+a.artifact_id,{headers:token?{Authorization:'Bearer '+token}:{}});let blob=await rr.blob();img.src=URL.createObjectURL(blob)}catch(e){}tile.appendChild(img);let meta=document.createElement('div');meta.className='tile-meta';meta.textContent=a.variant+' · '+a.provider+' · '+a.status;tile.appendChild(meta);$('gallery').appendChild(tile)}}catch(e){$('gallery').innerHTML='<div class="empty">'+e.message+'</div>'}}
 async function status(){if(!owner)return;$("status").textContent='Загрузка…';try{let x=await j('/status/'+owner);$("status").textContent=JSON.stringify(x,null,2)}catch(e){$("status").textContent=e.message}}
-show();boot();if(owner){status();gallery()}
+show();boot();
 </script>
 </body>
 </html>"""
@@ -167,6 +172,13 @@ show();boot();if(owner){status();gallery()}
             self.send_response(200); self.send_header('Content-Type',row['mime_type']); self.send_header('Cache-Control','no-store'); self.send_header('Content-Length',str(len(data))); self.end_headers(); self.wfile.write(data); return
         if not self.require_auth(): return
         if self.path=='/provider': return self.sendj(200,self.factory.provider_status())
+        if self.path=='/owners':
+            owners=self.factory.store.q('SELECT owner_id,created_at FROM owners ORDER BY created_at DESC')
+            out=[]
+            for o in owners:
+                chars=self.factory.store.q('SELECT character_id,name,state,version FROM characters WHERE owner_id=? ORDER BY created_at',(o['owner_id'],))
+                out.append({'owner_id':o['owner_id'],'created_at':o['created_at'],'characters':[dict(c) for c in chars]})
+            return self.sendj(200,{'owners':out})
         if self.path.startswith('/status/'):
             return self.sendj(200,self.factory.status(self.path.split('/')[-1]))
         if self.path.startswith('/jobs/'):
