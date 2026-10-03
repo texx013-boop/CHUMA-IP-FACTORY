@@ -325,6 +325,50 @@ def test_api_character_profile_requires_matching_owner_scope():
         factory.store.close(); d.cleanup()
 
 
+def test_video_job_get_and_run_require_matching_owner_scope():
+    d = tempfile.TemporaryDirectory()
+    factory = CHUMA(Path(d.name) / "db.sqlite", Path(d.name) / "media")
+    owner = factory.owner(); other = factory.owner()
+    cid = factory.create_character(owner, "Private Video Job")
+    job = factory.video_combain.create_job(owner, cid)
+    previous_factory, previous_token, previous_video = API.factory, API.admin_token, getattr(API, 'video_combain', None)
+    from chuma_ip_factory.video_combain import VideoCombain
+    API.factory, API.admin_token, API.video_combain = factory, "secret", VideoCombain(factory)
+    server = HTTPServer(("127.0.0.1", 0), API)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        base = f"http://127.0.0.1:{server.server_port}"
+        for method, path, body in (
+            ("GET", f"/video/jobs/{job['video_job_id']}", None),
+            ("POST", f"/video/jobs/{job['video_job_id']}/run", b"{}"),
+        ):
+            req = urllib.request.Request(
+                base + path,
+                data=body,
+                method=method,
+                headers={"Authorization":"Bearer secret","X-Owner-ID":other,
+                         "Content-Type":"application/json"},
+            )
+            try:
+                urllib.request.urlopen(req, timeout=5)
+                assert False, f"cross-owner video job {method} was accepted"
+            except urllib.error.HTTPError as exc:
+                assert exc.code == 403
+                assert json.loads(exc.read().decode())["error"] == "owner_forbidden"
+
+        req = urllib.request.Request(
+            base + f"/video/jobs/{job['video_job_id']}",
+            headers={"Authorization":"Bearer secret","X-Owner-ID":owner},
+        )
+        with urllib.request.urlopen(req, timeout=5) as response:
+            payload = json.loads(response.read().decode())
+            assert payload["video_job_id"] == job["video_job_id"]
+    finally:
+        server.shutdown(); server.server_close()
+        API.factory, API.admin_token, API.video_combain = previous_factory, previous_token, previous_video
+        factory.store.close(); d.cleanup()
+
+
 def test_video_job_listing_supports_owner_scoped_character_filter():
     d = tempfile.TemporaryDirectory()
     factory = CHUMA(Path(d.name) / "db.sqlite", Path(d.name) / "media")
