@@ -215,6 +215,30 @@ show();boot();
             self.sendj(404,{'error':'not_found'})
         except Exception as e: self.sendj(400,{'error':type(e).__name__,'message':str(e)})
 
+def recover_exhausted_reference_jobs(factory):
+    """Recover legacy provider-credit failures without requiring a browser session."""
+    try:
+        owners=factory.store.q("SELECT owner_id FROM owners")
+        for owner_row in owners:
+            owner_id=owner_row['owner_id']
+            failed=factory.store.one(
+                "SELECT job_id FROM jobs WHERE owner_id=? AND status='DEAD_LETTER' "
+                "AND error LIKE '%402%' ORDER BY created_at DESC LIMIT 1", (owner_id,)
+            )
+            if not failed:
+                continue
+            ref_char=factory.store.one(
+                "SELECT character_id FROM characters WHERE owner_id=? "
+                "AND card_json LIKE '%reference_asset_id%' ORDER BY updated_at DESC LIMIT 1", (owner_id,)
+            )
+            if not ref_char:
+                continue
+            key=f"server-recovery-402-{failed['job_id']}"
+            factory.enqueue_job(owner_id,'AUTONOMOUS_CYCLE',
+                {'character_id':ref_char['character_id'],'platform':'local-test','max_attempts':3},key)
+    except Exception as exc:
+        print(f"CHUMA recovery scan deferred: {type(exc).__name__}: {exc}", flush=True)
+
 def worker_loop(factory,stop_event):
     while not stop_event.is_set():
         try:
