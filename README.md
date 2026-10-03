@@ -31,3 +31,5 @@ Railway cloud deployment, with provider-agnostic application contracts and exter
 ## 2.5.7
 
 Reference-driven image generation is wired for Hugging Face image-to-image providers. Character reference assets are preserved in provenance and can drive new content generation when Hugging Face is connected.
+
+<!-- Railway force redeploy 2026-10-03 -->
