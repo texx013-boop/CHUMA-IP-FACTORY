@@ -12,6 +12,11 @@ def test_video_combain_manifest_job_and_provenance():
     factory = CHUMA(Path(d.name) / "db.sqlite", Path(d.name) / "media")
     owner = factory.owner()
     character_id = factory.create_character(owner, "Video Test")
+    factory.initialize_character(owner, character_id)
+    content_id = factory.create_content(owner, character_id)
+    factory.qc(owner, content_id)
+    artifacts = factory.store.q("SELECT artifact_id FROM artifacts WHERE owner_id=? AND content_id=? AND status='READY'", (owner, content_id))
+    assert artifacts
     video = VideoCombain(factory)
 
     status = video.status()
@@ -22,8 +27,8 @@ def test_video_combain_manifest_job_and_provenance():
     job = video.create_job(
         owner,
         character_id,
-        source_content_id="CONTENT-1",
-        source_asset_ids=["ASSET-1", "ASSET-2"],
+        source_content_id=content_id,
+        source_asset_ids=[a["artifact_id"] for a in artifacts],
         brief={"hook": "camera turns toward character"},
     )
     assert job["status"] == "QUEUED"
@@ -250,9 +255,14 @@ def test_video_combain_jobs_survive_restart():
     factory = CHUMA(db, media)
     owner = factory.owner()
     character_id = factory.create_character(owner, "Restart Video")
+    factory.initialize_character(owner, character_id)
+    content_id = factory.create_content(owner, character_id)
+    factory.qc(owner, content_id)
+    artifacts = factory.store.q("SELECT artifact_id FROM artifacts WHERE owner_id=? AND content_id=? AND status='READY'", (owner, content_id))
+    assert artifacts
     video = VideoCombain(factory)
-    job = video.create_job(owner, character_id, source_content_id="CONTENT-PERSIST",
-                           source_asset_ids=["ART-PERSIST"], brief={"hook": "persist"})
+    job = video.create_job(owner, character_id, source_content_id=content_id,
+                           source_asset_ids=[artifacts[0]["artifact_id"]], brief={"hook": "persist"})
     job_id = job["video_job_id"]
     factory.store.close()
 
@@ -262,8 +272,8 @@ def test_video_combain_jobs_survive_restart():
     assert restored is not None
     assert restored["owner_id"] == owner
     assert restored["character_id"] == character_id
-    assert restored["source_content_id"] == "CONTENT-PERSIST"
-    assert restored["source_asset_ids"] == ["ART-PERSIST"]
+    assert restored["source_content_id"] == content_id
+    assert restored["source_asset_ids"] == [artifacts[0]["artifact_id"]]
     assert restored["brief"]["hook"] == "persist"
     reopened.store.close()
     d.cleanup()
@@ -318,5 +328,24 @@ def test_video_combain_artifact_is_atomically_written_and_has_expected_digest():
     assert not output.with_suffix(output.suffix + ".tmp").exists()
     assert artifact["digest"] == hashlib.sha256(output.read_bytes()).hexdigest()
 
+    factory.store.close()
+    d.cleanup()
+
+
+def test_video_combain_rejects_foreign_provenance_inputs():
+    d = tempfile.TemporaryDirectory()
+    factory = CHUMA(Path(d.name) / "db.sqlite", Path(d.name) / "media")
+    owner = factory.owner(); other = factory.owner()
+    cid = factory.create_character(owner, "Provenance Owner")
+    other_cid = factory.create_character(other, "Other Owner")
+    factory.initialize_character(owner, cid)
+    content_id = factory.create_content(owner, cid)
+    factory.qc(owner, content_id)
+    artifact = factory.store.one("SELECT artifact_id FROM artifacts WHERE owner_id=? AND content_id=? AND status='READY' LIMIT 1", (owner, content_id))
+    try:
+        VideoCombain(factory).create_job(other, other_cid, source_content_id=content_id, source_asset_ids=[artifact["artifact_id"]])
+        assert False, "foreign provenance was accepted"
+    except ValueError as exc:
+        assert str(exc) == "content_not_found"
     factory.store.close()
     d.cleanup()
