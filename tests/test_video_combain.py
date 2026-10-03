@@ -213,7 +213,7 @@ def test_video_http_download_output_limit():
         def __exit__(self, exc_type, exc, tb):
             return False
         def read(self, size=-1):
-            return b"x" * (size if size > 0 else 10)
+            return b"x" * (17 if size > 0 else 10)
 
     engine = HTTPVideoEngine("https://example.invalid", "token", max_output_bytes=16)
     payload = {"video_url": "https://cdn.invalid/video.mp4"}
