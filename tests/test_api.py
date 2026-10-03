@@ -323,3 +323,35 @@ def test_api_character_profile_requires_matching_owner_scope():
         server.shutdown(); server.server_close()
         API.factory, API.admin_token = previous_factory, previous_token
         factory.store.close(); d.cleanup()
+
+
+def test_video_job_listing_is_scoped_to_owner():
+    d = tempfile.TemporaryDirectory()
+    factory = CHUMA(Path(d.name) / "db.sqlite", Path(d.name) / "media")
+    owner = factory.owner(); other = factory.owner()
+    cid = factory.create_character(owner, "Video Scoped")
+    job = factory.video_combain.create_job(owner, cid)
+    previous_factory, previous_token, previous_video = API.factory, API.admin_token, getattr(API, 'video_combain', None)
+    from chuma_ip_factory.video_combain import VideoCombain
+    API.factory, API.admin_token, API.video_combain = factory, "secret", VideoCombain(factory)
+    server = HTTPServer(("127.0.0.1", 0), API)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        req = urllib.request.Request(
+            f"http://127.0.0.1:{server.server_port}/video/jobs",
+            headers={"Authorization":"Bearer secret", "X-Owner-ID":other},
+        )
+        with urllib.request.urlopen(req, timeout=5) as response:
+            payload = json.loads(response.read().decode())
+            assert payload["jobs"] == []
+        req = urllib.request.Request(
+            f"http://127.0.0.1:{server.server_port}/video/jobs",
+            headers={"Authorization":"Bearer secret", "X-Owner-ID":owner},
+        )
+        with urllib.request.urlopen(req, timeout=5) as response:
+            payload = json.loads(response.read().decode())
+            assert [item["video_job_id"] for item in payload["jobs"]] == [job["video_job_id"]]
+    finally:
+        server.shutdown(); server.server_close()
+        API.factory, API.admin_token, API.video_combain = previous_factory, previous_token, previous_video
+        factory.store.close(); d.cleanup()
