@@ -163,3 +163,41 @@ def test_video_http_download_output_limit():
             assert False, "oversized video output was accepted"
         except RuntimeError as exc:
             assert str(exc) == "video_provider_output_too_large"
+
+
+def test_video_http_base64_output_limit():
+    from unittest.mock import patch
+    from chuma_ip_factory import video_combain as module
+
+    class ApiResponse:
+        def __enter__(self): return self
+        def __exit__(self, exc_type, exc, tb): return False
+        def read(self):
+            return __import__("json").dumps({"video_base64": "x" * 1000}).encode()
+
+    engine = HTTPVideoEngine("https://example.invalid", "token", max_output_bytes=16)
+    with patch.object(module.urllib.request, "urlopen", return_value=ApiResponse()):
+        try:
+            engine.render({"test": True})
+            assert False, "oversized base64 output was accepted"
+        except RuntimeError as exc:
+            assert str(exc) == "video_provider_output_too_large"
+
+
+def test_video_http_provider_response_limit():
+    from unittest.mock import patch
+    from chuma_ip_factory import video_combain as module
+
+    class ApiResponse:
+        def __enter__(self): return self
+        def __exit__(self, exc_type, exc, tb): return False
+        def read(self, size=-1):
+            return b"x" * (size if size > 0 else 10)
+
+    engine = HTTPVideoEngine("https://example.invalid", "token", max_output_bytes=16)
+    with patch.object(module.urllib.request, "urlopen", return_value=ApiResponse()):
+        try:
+            engine.render({"test": True})
+            assert False, "oversized provider response was accepted"
+        except RuntimeError as exc:
+            assert str(exc) == "video_provider_response_too_large"
