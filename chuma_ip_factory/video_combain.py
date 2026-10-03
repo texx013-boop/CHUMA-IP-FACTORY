@@ -276,9 +276,17 @@ class VideoCombain:
         if row["status"] == "SUCCEEDED":
             return self.get_job(video_job_id)
         now = int(time.time())
-        self.store.db.execute("UPDATE video_jobs SET status=?,updated_at=?,error=NULL WHERE video_job_id=?",
-                              ("RUNNING", now, video_job_id))
+        claimed = self.store.db.execute(
+            "UPDATE video_jobs SET status=?,updated_at=?,error=NULL "
+            "WHERE video_job_id=? AND status IN ('QUEUED','FAILED')",
+            ("RUNNING", now, video_job_id),
+        )
         self.store.commit()
+        if claimed.rowcount != 1:
+            current = self.get_job(video_job_id)
+            if current and current["status"] in ("RUNNING", "SUCCEEDED"):
+                return current
+            raise RuntimeError("video_job_not_runnable")
         try:
             brief = json.loads(row["brief_json"])
             source_assets = json.loads(row["source_asset_ids_json"])
