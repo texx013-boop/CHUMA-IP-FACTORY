@@ -3,6 +3,7 @@ import json, os, hmac, threading, time
 from .budget import BudgetPolicy
 from pathlib import Path
 from .core import CHUMA, VERSION
+from .video_combain import VideoCombain
 
 class API(BaseHTTPRequestHandler):
     MAX_BODY_BYTES=1024*1024
@@ -32,7 +33,7 @@ class API(BaseHTTPRequestHandler):
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>CHUMA OS · IP Factory</title>
+<title>SHUMA.SPACE · IP Factory</title>
 <style>
 :root{--bg:#050609;--panel:#0d1017;--panel2:#141823;--line:#252b38;--text:#f7f8fc;--muted:#8992a4;--accent:#c8ff35;--accent2:#72f6d2;--pink:#ff4fd8;--violet:#8b5cff;--danger:#ff647d;--shadow:0 28px 90px rgba(0,0,0,.52)}
 *{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 78% -8%,rgba(200,255,53,.13),transparent 26%),radial-gradient(circle at 18% 8%,rgba(139,92,255,.14),transparent 24%),radial-gradient(circle at 90% 70%,rgba(255,79,216,.07),transparent 22%),#050609;color:var(--text);font:14px/1.5 Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;overflow-x:hidden}
@@ -59,7 +60,7 @@ pre{margin:0;background:#090b0e;border:1px solid var(--line);padding:14px;border
 <body>
 <div class="app">
 <aside class="sidebar">
-  <div class="logo"><div class="logo-mark">Ч</div><span>CHUMA <small style="color:var(--muted);font-weight:650">OS</small></span></div>
+  <div class="logo"><div class="logo-mark">Ч</div><span>SHUMA<small style="color:var(--muted);font-weight:650">.SPACE</small></span></div>
   <nav class="nav">
     <button class="active" onclick="scrollToId('overview')"><span class="dot"></span><span>Главная</span></button>
     <button onclick="scrollToId('profile-card')"><span>◎</span>&nbsp; <span>Мой профиль</span></button>
@@ -143,7 +144,15 @@ pre{margin:0;background:#090b0e;border:1px solid var(--line);padding:14px;border
     <div id="gallery" class="gallery"><div class="empty">Изображения появятся здесь после производства.</div></div>
   </section>
 
-  <section class="card" id="state-card" style="margin-top:18px">
+  <section class="card" id="video-card" style="margin-top:18px">
+<div class="card-head"><div><h2>Video Combain</h2><div class="card-sub">Подключаемый конвейер для превращения персонажа и image-контента в видео</div></div><span class="eyebrow">VIDEO PIPELINE</span></div>
+<div id="video-engines" class="action-row"></div>
+<div class="field" style="margin-top:14px"><label>Задача видео</label><textarea id="video-brief" rows="3" placeholder="Например: короткая реакция персонажа, крупный план, плавное движение камеры…"></textarea></div>
+<div style="display:flex;gap:10px;flex-wrap:wrap"><button class="primary" onclick="createVideoJob()">▶ Создать видеозадачу</button><button class="secondary" onclick="videoStatus()">Обновить</button></div>
+<div id="video-result" style="margin-top:14px"></div>
+</section>
+
+<section class="card" id="state-card" style="margin-top:18px">
     <div class="card-head"><div><h2>Состояние фабрики</h2><div class="card-sub">Diagnostics / provenance / jobs</div></div><span class="eyebrow">SYSTEM</span></div>
     <pre id="status">—</pre>
   </section>
@@ -156,6 +165,8 @@ function toast(msg,kind='ok'){const el=$('toast');el.textContent=msg;el.style.bo
 function scrollToId(id){document.getElementById(id)?.scrollIntoView({behavior:'smooth',block:'start'});document.querySelectorAll('.nav button').forEach(b=>b.classList.remove('active'));const map={overview:0,'profile-card':1,'character-card':2,'gallery-card':3,'state-card':4};const buttons=document.querySelectorAll('.nav button');if(map[id]!=null&&buttons[map[id]])buttons[map[id]].classList.add('active')}
 function show(){if(owner){$("character").textContent="ID владельца: "+owner;$("profile-owner").textContent=owner.slice(0,12)+'…'}if(character){$("character").textContent="ID: "+character;$("profile-character").textContent=$('metric-name').textContent||character}}
 async function j(url,opt={}){opt.headers=Object.assign({'Content-Type':'application/json'},opt.headers||{});const token=localStorage.chuma_token;if(token)opt.headers.Authorization='Bearer '+token;let r=await fetch(url,opt);let x=await r.json();if(r.status===401){localStorage.removeItem('chuma_token');throw new Error('Требуется токен доступа CHUMA.')}if(!r.ok)throw new Error(x.message||x.error||r.status);return x}
+async function videoStatus(){try{const x=await j('/video/status');$('video-engines').innerHTML=(x.engines||[]).map(e=>'<div class="action"><strong>'+e.name+'</strong><span>'+e.description+' · '+(e.connected?'подключён':'готов к подключению')+'</span></div>').join('')}catch(e){$('video-engines').innerHTML='<div class="empty">'+e.message+'</div>'}}
+async function createVideoJob(){if(!owner||!character)return toast('Сначала создай персонажа','err');try{const x=await j('/video/jobs',{method:'POST',body:JSON.stringify({owner_id:owner,character_id:character,brief:{prompt:$('video-brief').value||'Character-consistent short video'},engine:'test-manifest'})});$('video-result').innerHTML='<pre>▶ Видеозадача создана · '+x.video_job_id+'</pre>';toast('Видеозадача создана');const done=await j('/video/jobs/'+x.video_job_id+'/run',{method:'POST',body:'{}'});$('video-result').innerHTML='<pre>'+JSON.stringify(done,null,2)+'</pre>'}catch(e){toast(e.message,'err')}}
 async function boot(){try{let cfg=await j('/config');if(cfg.auth_required&&!localStorage.chuma_token){let t=prompt('Введите токен доступа CHUMA:');if(t){localStorage.chuma_token=t.trim();}}let b=await j('/budget');let x=await j('/provider');$("provider").innerHTML='<span class="ok">ONLINE</span> · '+x.version+' · '+x.name+' · budget '+b.mode+(b.allow_paid?'':' · paid OFF');$("app-version").textContent=x.version;await hydrate()}catch(e){$("provider").textContent='Ошибка: '+e.message}}
 async function quickStart(){try{if(!owner){let x=await j('/owners',{method:'POST',body:'{}'});owner=x.owner_id;localStorage.chuma_owner=owner}if(!character){let x=await j('/characters',{method:'POST',body:JSON.stringify({owner_id:owner,name:'CHUMA',card:{description:'Autonomous image-first seed character'}})});character=x.character_id;localStorage.chuma_character=character}$('metric-name').textContent=$('name').value||'CHUMA';show();toast('⚡ CHUMA готова к работе');await status();await gallery()}catch(e){toast(e.message,'err')}}
 function setToken(){const t=prompt('Токен доступа CHUMA:');if(t===null)return;localStorage.chuma_token=t.trim();location.reload()}
@@ -175,7 +186,7 @@ async function loadDNA(){if(!owner||!character)return;try{const x=await j('/char
 async function cycle(){if(!owner||!character)return toast('Сначала создай владельца и персонажа','err');try{let x=await j('/jobs',{method:'POST',body:JSON.stringify({owner_id:owner,character_id:character,platform:'local-test'})});$('result').innerHTML='<pre>⚡ Производство запущено · '+x.job_id+'</pre>';toast('Цикл производства запущен');let id=x.job_id;let timer=setInterval(async()=>{try{let job=await j('/jobs/'+id);$('result').innerHTML='<pre>'+JSON.stringify(job,null,2)+'</pre>';if(['SUCCEEDED','DEAD_LETTER'].includes(job.status)){clearInterval(timer);toast(job.status==='SUCCEEDED'?'Цикл завершён':'Цикл завершился с ошибкой',job.status==='SUCCEEDED'?'ok':'err');await status();await gallery()}}catch(e){clearInterval(timer);$('result').textContent=e.message}},1500)}catch(e){toast(e.message,'err')}}\nasync function autoRecover(){try{let s=await j('/status/'+owner);let jobs=s.jobs_detail||[];let hasRef=(s.artifacts_detail||[]).some(a=>a.character_id===character&&a.variant==='reference');if(!hasRef)return;let failed=jobs.find(job=>job.status==='DEAD_LETTER'&&String(job.error||'').includes('402'));if(!failed)return;let x=await j('/jobs',{method:'POST',body:JSON.stringify({owner_id:owner,character_id:character,platform:'local-test',idempotency_key:'recovery-'+failed.job_id})});$('result').innerHTML='<pre>Автовосстановление запущено · '+x.job_id+'</pre>';let id=x.job_id;let timer=setInterval(async()=>{try{let job=await j('/jobs/'+id);$('result').innerHTML='<pre>'+JSON.stringify(job,null,2)+'</pre>';if(['SUCCEEDED','DEAD_LETTER'].includes(job.status)){clearInterval(timer);await status();await gallery()}}catch(e){clearInterval(timer)}},1500)}catch(e){console.warn('autoRecover',e)}}
 async function gallery(){if(!owner)return;try{let r=await j('/status/'+owner);if(!r.artifacts_detail.length){$('gallery').innerHTML='<div class="empty">Изображения появятся здесь после производства.</div>';return}let token=localStorage.chuma_token;$('gallery').innerHTML='';const items=[...r.artifacts_detail].sort((a,b)=>String(b.created_at||'').localeCompare(String(a.created_at||'')));for(const a of items){let tile=document.createElement('div');tile.className='tile';let img=document.createElement('img');img.loading='lazy';try{let rr=await fetch('/artifacts/'+a.artifact_id,{headers:token?{Authorization:'Bearer '+token}:{}});let blob=await rr.blob();img.src=URL.createObjectURL(blob)}catch(e){}tile.appendChild(img);let meta=document.createElement('div');meta.className='tile-meta';meta.textContent=a.variant+' · '+a.provider+' · '+a.status;tile.appendChild(meta);$('gallery').appendChild(tile)}}catch(e){$('gallery').innerHTML='<div class="empty">'+e.message+'</div>'}}
 async function status(){if(!owner)return;$("status").textContent='Загрузка…';try{let x=await j('/status/'+owner);$('profile-content').textContent=(x.artifacts_detail||[]).length;const hasRef=(x.artifacts_detail||[]).some(a=>a.character_id===character&&a.variant==='reference');$('profile-reference').textContent=hasRef?'✓ Референс подключён':'Референс не добавлен';$("status").textContent=JSON.stringify(x,null,2);const jobs=x.jobs_detail||[];const active=jobs.find(q=>['QUEUED','RUNNING'].includes(q.status));const hb=$('health-badge'),jb=$('job-badge');hb.textContent='● SYSTEM READY';hb.style.color='var(--accent)';hb.style.borderColor='rgba(200,255,53,.25)';jb.textContent=active?('● '+active.status):'● NO ACTIVE JOB';jb.style.color=active?'var(--accent2)':'#8992a4';if(active){$('result').innerHTML='<pre>⚙ Фабрика работает · '+active.job_id+'</pre>'}}catch(e){$("status").textContent=e.message;$('health-badge').textContent='● SYSTEM ERROR';$('health-badge').style.color='var(--danger)'}}
-document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();scrollToId('overview');document.querySelector('.top-title')?.focus()}});show();boot();loadDNA();setInterval(()=>{if(owner)status().catch(()=>{})},8000);
+document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();scrollToId('overview');document.querySelector('.top-title')?.focus()}});show();boot();videoStatus();loadDNA();setInterval(()=>{if(owner)status().catch(()=>{})},8000);
 </script>
 </body>
 </html>"""
@@ -205,6 +216,11 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLower
             except FileNotFoundError: return self.sendj(404,{'error':'artifact_file_not_found'})
             self.send_response(200); self.send_header('Content-Type',row['mime_type']); self.send_header('Cache-Control','no-store'); self.send_header('Content-Length',str(len(data))); self.end_headers(); self.wfile.write(data); return
         if not self.require_auth(): return
+        if self.path=='/video/status': return self.sendj(200,self.video_combain.status())
+        if self.path.startswith('/video/jobs/'):
+            vid=self.path.split('/')[3]
+            job=self.video_combain.get_job(vid)
+            return self.sendj(200,job) if job else self.sendj(404,{'error':'video_job_not_found'})
         if self.path=='/provider': return self.sendj(200,self.factory.provider_status())
         if self.path=='/owners':
             owners=self.factory.store.q('SELECT owner_id,created_at FROM owners ORDER BY created_at DESC')
@@ -247,6 +263,12 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLower
                 if n > self.MAX_BODY_BYTES: self.rfile.read(self.MAX_BODY_BYTES+1)
                 return self.sendj(413,{'error':'payload_too_large','message':'request body exceeds 1 MiB'})
             data=json.loads(self.rfile.read(n) or '{}')
+            if p=='/video/jobs':
+                job=self.video_combain.create_job(data['owner_id'],data['character_id'],data.get('source_content_id'),data.get('source_asset_ids'),data.get('brief'),data.get('engine','test-manifest'))
+                return self.sendj(202,job)
+            if p.startswith('/video/jobs/') and p.endswith('/run'):
+                vid=p.split('/')[3]
+                return self.sendj(200,self.video_combain.run_job(vid))
             if p=='/owners': return self.sendj(201,{'owner_id':f.owner()})
             if p.startswith('/characters/') and p.endswith('/preferences'):
                 cid=p.split('/')[2]
@@ -314,7 +336,7 @@ def worker_loop(factory,stop_event):
         stop_event.wait(1)
 
 def run(host='127.0.0.1',port=8097,db='runtime/chuma.db',asset_root='runtime/media',image_provider=None,budget_policy=None):
-    f=CHUMA(db,asset_root=asset_root,image_provider=image_provider); API.factory=f; API.budget_policy=budget_policy or BudgetPolicy()
+    f=CHUMA(db,asset_root=asset_root,image_provider=image_provider); API.factory=f; API.video_combain=VideoCombain(f); API.budget_policy=budget_policy or BudgetPolicy()
     # Autonomous first-run bootstrap is best-effort: it must never prevent the
     # HTTP service from starting. A persistent marker makes the bootstrap idempotent.
     if os.getenv('CHUMA_AUTOSTART', 'true').strip().lower() not in ('0','false','no','off'):
