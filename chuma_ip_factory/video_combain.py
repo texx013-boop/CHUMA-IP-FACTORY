@@ -6,6 +6,7 @@ import json
 import time
 import urllib.error
 import urllib.request
+import urllib.parse
 import uuid
 from pathlib import Path
 from typing import Any, Protocol
@@ -86,6 +87,11 @@ class HTTPVideoEngine:
                             "provider_response": {"keys": sorted(payload.keys()), "attempt": attempt}}
                 url = payload.get("video_url")
                 if url:
+                    parsed_url = urllib.parse.urlparse(url)
+                    if parsed_url.scheme not in ("http", "https") or not parsed_url.netloc:
+                        raise RuntimeError("video_provider_invalid_video_url")
+                    if parsed_url.username or parsed_url.password:
+                        raise RuntimeError("video_provider_invalid_video_url")
                     download_req = urllib.request.Request(url, headers={"User-Agent": "SHUMA.SPACE/1.0"})
                     with urllib.request.urlopen(download_req, timeout=self.timeout) as response:
                         data = response.read(self.max_output_bytes + 1)
