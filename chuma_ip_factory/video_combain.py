@@ -178,6 +178,18 @@ class VideoCombain:
                    "style": "character-consistent", "source_content_id": source_content_id,
                    "source_asset_ids": source_asset_ids or [], **(brief or {})}
         brief_json = json.dumps(payload, ensure_ascii=False, sort_keys=True)
+        if source_content_id:
+            existing = self.store.one(
+                "SELECT video_job_id FROM video_jobs "
+                "WHERE owner_id=? AND character_id=? AND engine=? "
+                "AND source_content_id=? AND brief_json=? "
+                "AND status IN ('QUEUED','RUNNING','SUCCEEDED') "
+                "ORDER BY created_at DESC LIMIT 1",
+                (owner_id, character_id, engine, source_content_id, brief_json),
+            )
+            if existing:
+                return self.get_job(existing["video_job_id"])
+        brief_json = json.dumps(payload, ensure_ascii=False, sort_keys=True)
         # Image-content jobs are idempotent: repeated factory triggers reuse the
         # active/successful job for the same source, engine and rendering brief.
         if source_content_id:
