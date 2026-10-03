@@ -1,5 +1,5 @@
 from http.server import BaseHTTPRequestHandler,HTTPServer
-import json, os, hmac, threading, time
+import json, os, hmac, threading, time, urllib.parse
 from .budget import BudgetPolicy
 from pathlib import Path
 from .core import CHUMA, VERSION
@@ -229,13 +229,20 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLower
             self.send_response(200); self.send_header('Content-Type',row['mime_type']); self.send_header('Cache-Control','no-store'); self.send_header('Content-Length',str(len(data))); self.end_headers(); self.wfile.write(data); return
         if not self.require_auth(): return
         if self.path=='/video/status': return self.sendj(200,self.video_combain.status())
-        if self.path=='/video/jobs':
-            owner=self.request_owner()
-            if not owner: return self.sendj(403,{'error':'owner_forbidden'})
-            character_id=None
-            if '?' in self.path:
-                pass
-            return self.sendj(200,{'jobs':self.video_combain.list_jobs(owner, character_id)})
+        if self.path.startswith('/video/jobs'):
+            parsed=urllib.parse.urlsplit(self.path)
+            if parsed.path=='/video/jobs':
+                owner=self.request_owner()
+                if not owner: return self.sendj(403,{'error':'owner_forbidden'})
+                query=urllib.parse.parse_qs(parsed.query, keep_blank_values=False)
+                character_id=(query.get('character_id') or [None])[0]
+                if character_id:
+                    if not self.factory.store.one(
+                        'SELECT character_id FROM characters WHERE character_id=? AND owner_id=?',
+                        (character_id, owner),
+                    ):
+                        return self.sendj(404,{'error':'character_not_found'})
+                return self.sendj(200,{'jobs':self.video_combain.list_jobs(owner, character_id)})
         if self.path.startswith('/video/jobs/'):
             vid=self.path.split('/')[3]
             job=self.video_combain.get_job(vid)
