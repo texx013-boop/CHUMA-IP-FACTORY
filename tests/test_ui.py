@@ -35,3 +35,9 @@ def test_chuma_ui_live_telemetry_contract():
     assert 'job-badge' in src
     assert "setInterval(()=>{if(owner)status()" in src
     assert 'SYSTEM READY' in src
+
+
+def test_ui_has_no_raw_alerts():
+    import pathlib
+    src=(pathlib.Path(__file__).parents[1]/'chuma_ip_factory'/'api.py').read_text(encoding='utf-8')
+    assert 'alert(' not in src
