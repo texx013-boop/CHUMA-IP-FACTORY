@@ -77,3 +77,9 @@ A feature is considered complete only after:
 6. saving the verified result to the repository.
 
 Current Video Combain hardening includes tests for image → video chaining, idempotency, restart persistence, provider response/base64/output-size limits, URL validation, and atomic artifact integrity.
+
+### Security / tenant isolation
+- Owner-scoped API resources require `X-Owner-ID` matching the resource owner.
+- Owner listing is itself scoped and never returns other owners' characters.
+- Artifact downloads verify owner scope, filesystem containment, and SHA-256 integrity before serving bytes.
+- Video Combain validates character/content/artifact provenance both at job creation and again immediately before rendering.
