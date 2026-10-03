@@ -25,9 +25,15 @@ class HFImageProvider:
         character = brief.get("character_name", "CHUMA")
         hook = brief.get("hook", "visual curiosity")
         mechanic = brief.get("mechanic", "identity discovery")
+        dna = brief.get("character_dna") or {}
+        identity = dna.get("identity") or dna.get("appearance") or dna.get("visual_dna") or {}
+        behavior = dna.get("behavior") or dna.get("behavioral_dna") or {}
+        dna_hint = ", ".join(str(v) for v in (identity.values() if isinstance(identity, dict) else []))
+        behavior_hint = ", ".join(str(v) for v in (behavior.values() if isinstance(behavior, dict) else []))
         prompt = (
             f"Photorealistic adult human character named {character}. "
             f"Character identity must remain consistent and recognizable. "
+            f"Identity DNA: {dna_hint}. Behavioral DNA: {behavior_hint}. "
             f"Content mechanic: {mechanic}. Hook: {hook}. "
             "Natural realistic skin, realistic anatomy, cinematic photography, "
             "high detail, editorial social-media portrait, no text, no watermark."
