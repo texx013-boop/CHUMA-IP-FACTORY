@@ -201,3 +201,21 @@ def test_video_http_provider_response_limit():
             assert False, "oversized provider response was accepted"
         except RuntimeError as exc:
             assert str(exc) == "video_provider_response_too_large"
+
+
+def test_video_combain_idempotency_uses_source_content_and_brief():
+    d = tempfile.TemporaryDirectory()
+    factory = CHUMA(Path(d.name) / "db.sqlite", Path(d.name) / "media")
+    owner = factory.owner()
+    character_id = factory.create_character(owner, "Dedup")
+    factory.initialize_character(owner, character_id)
+    content_id = factory.create_content(owner, character_id)
+    factory.qc(owner, content_id)
+    video = VideoCombain(factory)
+    a = video.create_job_from_content(owner, content_id, {"hook": "same"})
+    b = video.create_job_from_content(owner, content_id, {"hook": "same"})
+    c = video.create_job_from_content(owner, content_id, {"hook": "different"})
+    assert a["video_job_id"] == b["video_job_id"]
+    assert a["video_job_id"] != c["video_job_id"]
+    factory.store.close()
+    d.cleanup()
