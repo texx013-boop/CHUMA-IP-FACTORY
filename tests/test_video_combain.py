@@ -326,8 +326,6 @@ def test_video_combain_idempotency_uses_source_content_and_brief():
 
 
 def test_video_combain_artifact_is_atomically_written_and_has_expected_digest():
-    import hashlib
-
     d = tempfile.TemporaryDirectory()
     factory = CHUMA(Path(d.name) / "db.sqlite", Path(d.name) / "media")
     owner = factory.owner()
@@ -422,8 +420,6 @@ def test_video_combain_rejects_tampered_source_artifact_before_render():
     failed = video.get_job(job["video_job_id"])
     assert failed["status"] == "FAILED"
     assert failed["error"] == "source_asset_integrity_failed"
-    assert artifact["content_hash"] == hashlib.sha256(b"original").hexdigest() or artifact["content_hash"] != hashlib.sha256(b"tampered-source").hexdigest()
-
     factory.store.close()
     d.cleanup()
 
