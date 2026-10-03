@@ -1,0 +1,49 @@
+services:
+  - type: web
+    name: chuma-ip-factory
+    runtime: docker
+    plan: 1c-2g
+    region: ohio
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /ready
+    maxShutdownDelaySeconds: 30
+    disk:
+      name: chuma-data
+      mountPath: /data
+      sizeGB: 10
+    envVars:
+      - key: PORT
+        value: "8097"
+      - key: CHUMA_HOST
+        value: "0.0.0.0"
+      - key: CHUMA_DATA_DIR
+        value: "/data"
+      - key: CHUMA_MEDIA_DIR
+        value: "/data/media"
+      - key: CHUMA_SPEND_MODE
+        value: "free"
+      - key: CHUMA_ALLOW_PAID_GENERATION
+        value: "false"
+      - key: CHUMA_MONTHLY_SOFT_CAP_USD
+        value: "0"
+      - key: CHUMA_MONTHLY_HARD_CAP_USD
+        value: "0"
+      - key: CHUMA_ADMIN_TOKEN
+        sync: false
+      - key: HF_TOKEN
+        sync: false
+      - key: CHUMA_IMAGE_API_KEY
+        sync: false
+      - key: CHUMA_VIDEO_API_KEY
+        sync: false
+      - key: DATABASE_URL
+        fromDatabase:
+          name: chuma-ip-factory-db
+          property: connectionString
+
+databases:
+  - name: chuma-ip-factory-db
+    plan: 0.5c-1g
+    region: ohio
+    postgresMajorVersion: "16"
