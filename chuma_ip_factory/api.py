@@ -210,8 +210,6 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLower
                 return self.sendj(200,{'status':'ready','version':VERSION})
             except Exception as exc:
                 return self.sendj(503,{'status':'not_ready','error':type(exc).__name__})
-        if self.path=='/config': return self.sendj(200,{'auth_required':bool(self.admin_token),'version':VERSION})
-        if self.path=='/budget': return self.sendj(200,self.budget_policy.describe())
         if self.path.startswith('/artifacts/'):
             if not self.require_auth(): return
             aid=self.path.split('/')[-1]
@@ -228,6 +226,8 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLower
                 return self.sendj(409,{'error':'artifact_integrity_failed'})
             self.send_response(200); self.send_header('Content-Type',row['mime_type']); self.send_header('Cache-Control','no-store'); self.send_header('Content-Length',str(len(data))); self.end_headers(); self.wfile.write(data); return
         if not self.require_auth(): return
+        if self.path=='/config': return self.sendj(200,{'auth_required':bool(self.admin_token),'version':VERSION})
+        if self.path=='/budget': return self.sendj(200,self.budget_policy.describe())
         if self.path=='/video/status': return self.sendj(200,self.video_combain.status())
         if self.path.startswith('/video/jobs'):
             parsed=urllib.parse.urlsplit(self.path)
@@ -352,7 +352,14 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLower
                 jid=f.enqueue_job(data['owner_id'],'AUTONOMOUS_CYCLE',payload,data.get('idempotency_key'))
                 return self.sendj(202,{'job_id':jid,'status':'QUEUED'})
             self.sendj(404,{'error':'not_found'})
-        except Exception as e: self.sendj(400,{'error':type(e).__name__,'message':str(e)})
+        except json.JSONDecodeError:
+            self.sendj(400,{'error':'invalid_json'})
+        except KeyError:
+            self.sendj(400,{'error':'invalid_request'})
+        except Exception as exc:
+            # Do not expose internal paths, SQL, provider responses, or secrets to clients.
+            print(f"CHUMA API request failed: {type(exc).__name__}", flush=True)
+            self.sendj(400,{'error':'request_failed'})
 
 def recover_exhausted_reference_jobs(factory):
     """Recover legacy provider-credit failures without requiring a browser session."""
