@@ -142,6 +142,10 @@ class VideoCombain:
                 engine TEXT NOT NULL, status TEXT NOT NULL,
                 output_artifact_id TEXT, error TEXT,
                 created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)""")
+        self.store.db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_video_jobs_source_dedupe "
+            "ON video_jobs(owner_id, character_id, engine, source_content_id, brief_json, status, created_at)"
+        )
         self.store.commit()
 
     def engines(self) -> list[dict[str, Any]]:
