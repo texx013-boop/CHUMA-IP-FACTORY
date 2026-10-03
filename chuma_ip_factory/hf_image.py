@@ -42,7 +42,9 @@ class HFImageProvider:
         client = InferenceClient(provider="auto", api_key=self.token)
         reference_path = request.get("reference_image_path")
         reference_model = request.get("reference_model") or self.reference_model
+        used_model = self.model
         if reference_path:
+            used_model = reference_model
             with open(reference_path, "rb") as image_file:
                 input_image = image_file.read()
             prompt = (
@@ -72,7 +74,7 @@ class HFImageProvider:
             "status": "APPROVED",
             "meta": {
                 "provider": self.name,
-                "model": self.model,
+                "model": used_model,
                 "request": request,
                 "generated_at": now(),
             },
