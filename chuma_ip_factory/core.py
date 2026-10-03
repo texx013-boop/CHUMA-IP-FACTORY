@@ -262,9 +262,11 @@ class CHUMA:
         brief={'character_id':cid,'character_name':character['name'],'mechanic':idea.get('mechanic'),'hook':idea.get('hook'),'format':'portrait_social','identity_lock':True,'reuse_policy':'prefer_approved_assets','character_dna':dna,'reference_asset_ids':[a['asset_id'] for a in assets if json.loads(a.get('meta_json','{}') or '{}').get('role')=='character_reference']}
         content_id=uid('CNT'); t=now()
         production_assets=[a for a in assets if json.loads(a.get('meta_json','{}') or '{}').get('role')!='character_reference']
+        reference_ids=brief.get('reference_asset_ids') or []
+        reference_generation=bool(reference_ids) and getattr(self.image_provider,'name','')=='huggingface-inference' and bool(getattr(self.image_provider,'connected',False))
         chosen=[a['asset_id'] for a in production_assets[:2]]
-        if not chosen:
-            chosen=[self._generate_asset(owner,cid,'TARGETED',{'reason':'content_gap'},brief=brief,content_id=content_id)]
+        if reference_generation or not chosen:
+            chosen=[self._generate_asset(owner,cid,'TARGETED',{'reason':'reference_driven_content' if reference_generation else 'content_gap'},brief=brief,content_id=content_id)]
         brief_id=uid('BRF'); production={'mode':'ASSEMBLY','asset_ids':chosen,'variants':['1:1','4:5','9:16'],'brief_id':brief_id}
         prov={'character_id':cid,'asset_ids':chosen,'schema_version':SCHEMA_VERSION,'engine_version':VERSION,'provider':getattr(self.image_provider,'name','unknown')}
         self.store.db.execute('INSERT INTO content VALUES(?,?,?,?,?,?,?,?,?)',(content_id,owner,cid,json.dumps(idea), 'QC_PENDING',json.dumps(production),json.dumps(prov),t,t))
