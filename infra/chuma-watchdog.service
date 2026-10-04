@@ -1,0 +1,21 @@
+[Unit]
+Description=CHUMA Watchdog
+After=network-online.target docker.service chuma-agent.service chuma-auto-update.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=simple
+User=root
+Environment=APP_ROOT=/opt/chuma
+Environment=CHUMA_WATCHDOG_INTERVAL=60
+ExecStart=/opt/chuma/agent/chuma-watchdog.sh
+Restart=always
+RestartSec=10
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ReadWritePaths=/opt/chuma
+
+[Install]
+WantedBy=multi-user.target
