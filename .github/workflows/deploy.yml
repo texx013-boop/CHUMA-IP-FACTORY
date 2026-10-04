@@ -47,5 +47,15 @@ jobs:
             cd /opt/chuma/release/infra
             docker compose --env-file .env -f compose.yml config -q
             docker compose --env-file .env -f compose.yml up -d --build
+            for i in $(seq 1 30); do
+              status="$(docker inspect --format '{{.State.Health.Status}}' chuma-platform-app-1 2>/dev/null || true)"
+              if [ "$status" = "healthy" ]; then break; fi
+              if [ "$status" = "unhealthy" ]; then
+                echo "CHUMA app healthcheck failed." >&2
+                exit 1
+              fi
+              sleep 5
+            done
+            test "$(docker inspect --format '{{.State.Health.Status}}' chuma-platform-app-1)" = "healthy"
             docker compose --env-file .env -f compose.yml ps
           '
