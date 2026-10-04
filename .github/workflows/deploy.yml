@@ -1,29 +1,17 @@
-name: CHUMA Deploy
+name: CHUMA Server Handoff
+
 on:
-  workflow_dispatch:
   push:
     branches: ["main"]
-concurrency:
-  group: chuma-production
-  cancel-in-progress: false
+  workflow_dispatch:
+
 jobs:
-  deploy:
+  handoff:
     runs-on: ubuntu-latest
-    env:
-      CHUMA_DEPLOY_HOST: "135.106.163.107"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Prepare SSH
-        env:
-          CHUMA_DEPLOY_PRIVATE_KEY_B64: ${{ secrets.CHUMA_DEPLOY_PRIVATE_KEY_B64 }}
-        run: |
-          test -n "$CHUMA_DEPLOY_PRIVATE_KEY_B64"
-          install -d -m 700 ~/.ssh
-          printf '%s' "$CHUMA_DEPLOY_PRIVATE_KEY_B64" | base64 -d > ~/.ssh/chuma_deploy
-          chmod 600 ~/.ssh/chuma_deploy
-          ssh-keyscan -H "$CHUMA_DEPLOY_HOST" >> ~/.ssh/known_hosts
-      - name: Test and validate
+      - name: Validate release
         run: |
           python -m pip install --upgrade pip
           pip install -e .
@@ -31,54 +19,9 @@ jobs:
           python -m compileall -q chuma_ip_factory run.py
           python -m pytest -q
           python -c "import yaml; yaml.safe_load(open('infra/compose.yml')); print('compose: OK')"
-          docker build -t chuma-ip-factory:ci .
-      - name: Package source
+      - name: Confirm autonomous server update path
         run: |
-          tar --exclude-vcs --exclude='infra/.env' --exclude='infra/backups' -czf /tmp/chuma-release.tgz .
-      - name: Upload release
-        run: |
-          scp -i ~/.ssh/chuma_deploy /tmp/chuma-release.tgz "chuma-deploy@$CHUMA_DEPLOY_HOST:/tmp/chuma-release.tgz"
-      - name: Deploy and verify
-        run: |
-          ssh -i ~/.ssh/chuma_deploy "chuma-deploy@$CHUMA_DEPLOY_HOST" '
-            set -eu
-            test -f /opt/chuma/infra/.env
-            SNAP=""
-            if [ -x /opt/chuma/agent/agent-backup.sh ] && [ -f /opt/chuma/release/infra/compose.yml ]; then
-              SNAP="$(/opt/chuma/agent/agent-backup.sh)"
-            elif [ -d /opt/chuma/release ]; then
-              STAMP="$(date +%Y%m%d-%H%M%S)"
-              SNAP="/opt/chuma/agent/backups/$STAMP"
-              mkdir -p "$SNAP"
-              chmod 700 "$SNAP"
-              tar --exclude-vcs --exclude="*/__pycache__" --exclude="*/.pytest_cache" -czf "$SNAP/release.tgz" -C /opt/chuma/release .
-            fi
-            rm -rf /opt/chuma/release
-            mkdir -p /opt/chuma/release
-            tar -xzf /tmp/chuma-release.tgz -C /opt/chuma/release
-            cp /opt/chuma/infra/.env /opt/chuma/release/infra/.env
-            cd /opt/chuma/release/infra
-            docker compose --env-file .env -f compose.yml config -q
-            docker compose --env-file .env -f compose.yml up -d --build
-            if [ -x /opt/chuma/release/infra/agent-install.sh ]; then
-              /opt/chuma/release/infra/agent-install.sh
-            fi
-            healthy=""
-            for i in $(seq 1 36); do
-              status="$(docker inspect --format '{{.State.Health.Status}}' chuma-platform-app-1 2>/dev/null || true)"
-              if [ "$status" = "healthy" ]; then healthy="yes"; break; fi
-              if [ "$status" = "unhealthy" ]; then break; fi
-              sleep 5
-            done
-            if [ "$healthy" != "yes" ]; then
-              docker compose --env-file .env -f compose.yml logs --tail=200 app || true
-              if [ -n "$SNAP" ] && [ -x /opt/chuma/agent/agent-rollback.sh ]; then
-                /opt/chuma/agent/agent-rollback.sh "$SNAP"
-              else
-                echo "No autonomous rollback helper/snapshot available." >&2
-                exit 1
-              fi
-            fi
-            test "$(docker inspect --format '{{.State.Health.Status}}' chuma-platform-app-1)" = "healthy"
-            docker compose --env-file .env -f compose.yml ps
-          '
+          test -f infra/auto-update.sh
+          test -f infra/chuma-auto-update.service
+          test -x infra/agent-install.sh
+          echo "Release validated. Production server updates itself from main through CHUMA Auto Update Agent."
