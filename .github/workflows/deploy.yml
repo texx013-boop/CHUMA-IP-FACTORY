@@ -58,6 +58,9 @@ jobs:
             cd /opt/chuma/release/infra
             docker compose --env-file .env -f compose.yml config -q
             docker compose --env-file .env -f compose.yml up -d --build
+            if [ -x /opt/chuma/release/infra/agent-install.sh ]; then
+              /opt/chuma/release/infra/agent-install.sh
+            fi
             for i in $(seq 1 36); do
               status="$(docker inspect --format '{{.State.Health.Status}}' chuma-platform-app-1 2>/dev/null || true)"
               if [ "$status" = "healthy" ]; then break; fi
