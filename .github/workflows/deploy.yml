@@ -12,14 +12,14 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    env:
+      CHUMA_DEPLOY_HOST: "135.106.175.117"
     steps:
       - name: Prepare SSH
         env:
           CHUMA_DEPLOY_PRIVATE_KEY: ${{ secrets.CHUMA_DEPLOY_PRIVATE_KEY }}
-          CHUMA_DEPLOY_HOST: ${{ secrets.CHUMA_DEPLOY_HOST }}
         run: |
           test -n "$CHUMA_DEPLOY_PRIVATE_KEY"
-          test -n "$CHUMA_DEPLOY_HOST"
           install -d -m 700 ~/.ssh
           printf '%s\n' "$CHUMA_DEPLOY_PRIVATE_KEY" > ~/.ssh/chuma_deploy
           chmod 600 ~/.ssh/chuma_deploy
@@ -30,14 +30,10 @@ jobs:
           tar --exclude-vcs --exclude='infra/.env' --exclude='infra/backups' -czf /tmp/chuma-release.tgz .
 
       - name: Upload release
-        env:
-          CHUMA_DEPLOY_HOST: ${{ secrets.CHUMA_DEPLOY_HOST }}
         run: |
           scp -i ~/.ssh/chuma_deploy /tmp/chuma-release.tgz "chuma-deploy@$CHUMA_DEPLOY_HOST:/tmp/chuma-release.tgz"
 
       - name: Deploy
-        env:
-          CHUMA_DEPLOY_HOST: ${{ secrets.CHUMA_DEPLOY_HOST }}
         run: |
           ssh -i ~/.ssh/chuma_deploy "chuma-deploy@$CHUMA_DEPLOY_HOST" '
             set -eu
