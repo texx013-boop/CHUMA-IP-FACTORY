@@ -75,7 +75,7 @@ pre{margin:0;background:#090b0e;border:1px solid var(--line);padding:14px;border
     <button onclick="scrollToId('character-card')"><span>◇</span>&nbsp; <span>Персонаж</span></button>
     <button onclick="scrollToId('gallery-card')"><span>▧</span>&nbsp; <span>Мой контент</span></button>
     <button onclick="scrollToId('dna-card')"><span>✦</span>&nbsp; <span>ДНК и голос</span></button>
-    <button onclick="scrollToId('state-card')"><span>◌</span>&nbsp; <span>Система</span></button>
+    <button onclick="scrollToId('control-card')"><span>◈</span>&nbsp; <span>Control</span></button><button onclick="scrollToId('state-card')"><span>◌</span>&nbsp; <span>Система</span></button>
   </nav>
   <div class="side-bottom"><div class="muted" style="font-size:11px;padding:0 4px">IP FACTORY · <span id="app-version">…</span></div><button onclick="setToken()">Токен доступа</button><button onclick="resetLocal()">Сбросить сессию</button></div>
 </aside>
@@ -160,7 +160,18 @@ pre{margin:0;background:#090b0e;border:1px solid var(--line);padding:14px;border
 <div id="video-result" style="margin-top:14px"></div>
 </section>
 
-<section class="card" id="state-card" style="margin-top:18px">
+<section class="card" id="control-card" style="margin-top:18px">
+    <div class="card-head"><div><h2>CHUMA CONTROL</h2><div class="card-sub">Единая панель состояния сервера и фабрики</div></div><span class="eyebrow">CONTROL</span></div>
+    <div class="action-row">
+      <button class="action" onclick="controlHealth()"><strong>◉ Проверить сервер</strong><span>Health / Ready / версия</span></button>
+      <button class="action" onclick="controlProvider()"><strong>◈ Проверить движки</strong><span>Провайдер изображения и видео</span></button>
+      <button class="action" onclick="status()"><strong>↻ Обновить фабрику</strong><span>Персонажи, контент, задачи и события</span></button>
+      <button class="action" onclick="gallery()"><strong>▧ Обновить контент</strong><span>Последние созданные материалы</span></button>
+    </div>
+    <div id="control-output" style="margin-top:14px"><pre>CONTROL READY</pre></div>
+  </section>
+
+  <section class="card" id="state-card" style="margin-top:18px">
     <div class="card-head"><div><h2>Состояние фабрики</h2><div class="card-sub">Diagnostics / provenance / jobs</div></div><span class="eyebrow">SYSTEM</span></div>
     <pre id="status">—</pre>
   </section>
@@ -170,9 +181,11 @@ pre{margin:0;background:#090b0e;border:1px solid var(--line);padding:14px;border
 const $=id=>document.getElementById(id);
 let owner=localStorage.chuma_owner||'',character=localStorage.chuma_character||'';
 function toast(msg,kind='ok'){const el=$('toast');el.textContent=msg;el.style.borderColor=kind==='err'?'rgba(255,100,125,.4)':'rgba(143,92,255,.28)';el.style.opacity='1';el.style.transform='translateY(0)';clearTimeout(window.__toast);window.__toast=setTimeout(()=>{el.style.opacity='0';el.style.transform='translateY(20px)'},2800)}
-function scrollToId(id){document.getElementById(id)?.scrollIntoView({behavior:'smooth',block:'start'});document.querySelectorAll('.nav button').forEach(b=>b.classList.remove('active'));const map={overview:0,'profile-card':1,'character-card':2,'gallery-card':3,'state-card':4};const buttons=document.querySelectorAll('.nav button');if(map[id]!=null&&buttons[map[id]])buttons[map[id]].classList.add('active')}
+function scrollToId(id){document.getElementById(id)?.scrollIntoView({behavior:'smooth',block:'start'});document.querySelectorAll('.nav button').forEach(b=>b.classList.remove('active'));const map={overview:0,'profile-card':1,'character-card':2,'gallery-card':3,'control-card':4,'state-card':5};const buttons=document.querySelectorAll('.nav button');if(map[id]!=null&&buttons[map[id]])buttons[map[id]].classList.add('active')}
 function show(){if(owner){$("character").textContent="ID владельца: "+owner;$("profile-owner").textContent=owner.slice(0,12)+'…'}if(character){$("character").textContent="ID: "+character;$("profile-character").textContent=$('metric-name').textContent||character}}
 async function j(url,opt={}){opt.headers=Object.assign({'Content-Type':'application/json'},opt.headers||{});if(owner)opt.headers['X-Owner-ID']=owner;const token=localStorage.chuma_token;if(token)opt.headers.Authorization='Bearer '+token;let r=await fetch(url,opt);let x=await r.json();if(r.status===401){localStorage.removeItem('chuma_token');throw new Error('Требуется токен доступа CHUMA.')}if(!r.ok)throw new Error(x.message||x.error||r.status);return x}
+async function controlHealth(){try{const h=await fetch('/health').then(r=>r.json());const r=await fetch('/ready');const ready=await r.json();$('control-output').innerHTML='<pre>SERVER: '+h.status+'\nVERSION: '+h.version+'\nREADY: '+(r.ok?'YES':'NO')+'\nTIME: '+new Date().toLocaleString()+'</pre>';toast(r.ok?'Сервер в норме':'Сервер требует внимания',r.ok?'ok':'err')}catch(e){$('control-output').innerHTML='<pre>SERVER OFFLINE\n'+e.message+'</pre>';toast('Сервер недоступен','err')}}
+async function controlProvider(){try{const [p,b]=await Promise.all([j('/provider'),j('/budget')]);$('control-output').innerHTML='<pre>'+JSON.stringify({provider:p,budget:b},null,2)+'</pre>';toast('Состояние движков обновлено')}catch(e){toast(e.message,'err')}}
 let videoEngine='test-manifest'; async function videoStatus(){try{const x=await j('/video/status');const active=(x.engines||[]).find(e=>e.id==='external-api'&&e.connected);videoEngine=active?'external-api':'test-manifest';$('video-engines').innerHTML=(x.engines||[]).map(e=>'<div class="action"><strong>'+e.name+'</strong><span>'+e.description+' · '+(e.connected?'подключён':'готов к подключению')+'</span></div>').join('')}catch(e){$('video-engines').innerHTML='<div class="empty">'+e.message+'</div>'}}
 async function createVideoJob(){if(!owner||!character)return toast('Сначала создай персонажа','err');try{const x=await j('/video/jobs',{method:'POST',body:JSON.stringify({owner_id:owner,character_id:character,brief:{prompt:$('video-brief').value||'Character-consistent short video'},engine:videoEngine})});$('video-result').innerHTML='<pre>▶ Видеозадача создана · '+x.video_job_id+'</pre>';toast('Видеозадача создана');const done=await j('/video/jobs/'+x.video_job_id+'/run',{method:'POST',body:'{}'});$('video-result').innerHTML='<pre>'+JSON.stringify(done,null,2)+'</pre>'}catch(e){toast(e.message,'err')}}\nasync function createVideoFromLatest(){if(!owner||!character)return toast('Сначала создай персонажа','err');try{const x=await j('/video/from-latest-content',{method:'POST',body:JSON.stringify({owner_id:owner,character_id:character,brief:{prompt:$('video-brief').value||'Character-consistent short video from latest image content'},engine:videoEngine})});$('video-result').innerHTML='<pre>⚡ Видеозадача из image-контента · '+x.video_job_id+'</pre>';toast('Связка image → video создана');const done=await j('/video/jobs/'+x.video_job_id+'/run',{method:'POST',body:'{}'});$('video-result').innerHTML='<pre>'+JSON.stringify(done,null,2)+'</pre>'}catch(e){toast(e.message,'err')}}
 async function boot(){try{let cfg=await j('/config');if(cfg.auth_required&&!localStorage.chuma_token){let t=prompt('Введите токен доступа CHUMA:');if(t){localStorage.chuma_token=t.trim();}}if(!owner){let created=await j('/owners',{method:'POST',body:'{}'});owner=created.owner_id;localStorage.chuma_owner=owner}let b=await j('/budget');let x=await j('/provider');$("provider").innerHTML='<span class="ok">ONLINE</span> · '+x.version+' · '+x.name+' · budget '+b.mode+(b.allow_paid?'':' · paid OFF');$("app-version").textContent=x.version;await hydrate()}catch(e){$("provider").textContent='Ошибка: '+e.message}}
