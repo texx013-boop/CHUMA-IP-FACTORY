@@ -1,26 +1,4 @@
-# Explicit dual entry: plain HTTP plus local TLS for browsers that upgrade
-# the address to HTTPS. A public trusted certificate requires a real domain;
-# the internal certificate keeps the 443 socket alive without pretending it is
-# publicly trusted.
-http://:80 {
-    encode gzip
-    reverse_proxy app:8097
-
-    header {
-        -Server
-        X-Content-Type-Options "nosniff"
-        X-Frame-Options "DENY"
-        Referrer-Policy "no-referrer"
-        Permissions-Policy "camera=(), microphone=(), geolocation=()"
-    }
-
-    request_body {
-        max_size 32MB
-    }
-}
-
-https://:443 {
-    tls internal
+{$CHUMA_DOMAIN} {
     encode gzip
     reverse_proxy app:8097
 
