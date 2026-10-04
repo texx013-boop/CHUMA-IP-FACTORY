@@ -63,7 +63,6 @@ while true; do
   fi
 
   TMP="$(mktemp -d "$APP_ROOT/update.XXXXXX")"
-  trap 'rm -rf "$TMP"' RETURN
 
   if ! curl -fsSL --retry 5 --retry-delay 2       "https://github.com/texx013-boop/CHUMA-IP-FACTORY/archive/refs/heads/$BRANCH.tar.gz"       -o "$TMP/release.tgz"; then
     log "release download failed"
@@ -136,6 +135,5 @@ while true; do
   fi
 
   rm -rf "$TMP"
-  trap - RETURN
   sleep "$INTERVAL"
 done
