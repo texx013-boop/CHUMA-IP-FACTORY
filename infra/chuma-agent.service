@@ -1,0 +1,21 @@
+[Unit]
+Description=CHUMA Autonomous Server Agent
+After=docker.service network-online.target
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=simple
+User=root
+Environment=APP_ROOT=/opt/chuma
+Environment=CHUMA_AGENT_INTERVAL=30
+ExecStart=/opt/chuma/agent/chuma-agent.sh
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ReadWritePaths=/opt/chuma
+
+[Install]
+WantedBy=multi-user.target
