@@ -16,6 +16,9 @@ cp "$COMPOSE_FILE" "$DEST/compose.snapshot"
 if [[ -f "$ENV_FILE" ]]; then cp "$ENV_FILE" "$DEST/env.snapshot"; fi
 "$COMPOSE_RUN" --env-file "$ENV_FILE" -f "$COMPOSE_FILE" config > "$DEST/compose.rendered"
 "$COMPOSE_RUN" --env-file "$ENV_FILE" -f "$COMPOSE_FILE" ps > "$DEST/services.txt" || true
+if command -v sha256sum >/dev/null 2>&1; then
+  sha256sum "$DEST"/* > "$DEST/SHA256SUMS" 2>/dev/null || true
+fi
 
 if [[ -d "$RELEASE_DIR" ]]; then
   tar --exclude-vcs --exclude='*/__pycache__' --exclude='*/.pytest_cache' -czf "$DEST/release.tgz" -C "$RELEASE_DIR" .
