@@ -43,7 +43,7 @@ cd "$ROOT/infra"
 docker compose up -d --build
 
 for i in {1..60}; do
-  if curl -fsS http://127.0.0.1:8097/health >/dev/null 2>&1; then
+  if curl -fsS http://127.0.0.1/health >/dev/null 2>&1; then
     if [[ -x "$ROOT/infra/agent-install.sh" ]]; then
       "$ROOT/infra/agent-install.sh"
     fi
