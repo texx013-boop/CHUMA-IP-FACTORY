@@ -42,8 +42,7 @@ cd "$RELEASE_DIR/infra"
 docker compose --env-file .env -f compose.yml up -d --build
 
 for i in $(seq 1 36); do
-  status="$(docker inspect --format '{{.State.Health.Status}}' chuma-platform-app-1 2>/dev/null || true)"
-  if [[ "$status" = "healthy" ]]; then
+  if curl -fsS --max-time 5 http://127.0.0.1/health >/dev/null 2>&1; then
     echo "Rollback completed successfully."
     exit 0
   fi
