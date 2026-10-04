@@ -15,15 +15,28 @@ jobs:
     env:
       CHUMA_DEPLOY_HOST: "135.106.175.117"
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Prepare SSH
         env:
-          CHUMA_DEPLOY_PRIVATE_KEY: ${{ secrets.CHUMA_DEPLOY_PRIVATE_KEY }}
+          CHUMA_DEPLOY_PRIVATE_KEY_B64: ${{ secrets.CHUMA_DEPLOY_PRIVATE_KEY_B64 }}
         run: |
-          test -n "$CHUMA_DEPLOY_PRIVATE_KEY"
+          test -n "$CHUMA_DEPLOY_PRIVATE_KEY_B64"
           install -d -m 700 ~/.ssh
-          printf '%s\n' "$CHUMA_DEPLOY_PRIVATE_KEY" > ~/.ssh/chuma_deploy
+          printf '%s' "$CHUMA_DEPLOY_PRIVATE_KEY_B64" | base64 -d > ~/.ssh/chuma_deploy
           chmod 600 ~/.ssh/chuma_deploy
           ssh-keyscan -H "$CHUMA_DEPLOY_HOST" >> ~/.ssh/known_hosts
+
+      - name: Test and validate
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+          pip install "psycopg[binary]>=3.2,<4" pytest pyyaml
+          python -m compileall -q chuma_ip_factory run.py
+          python -m pytest -q
+          python -c "import yaml; yaml.safe_load(open('infra/compose.yml')); print('compose: OK')"
+          docker build -t chuma-ip-factory:ci .
 
       - name: Package source
         run: |
@@ -33,7 +46,7 @@ jobs:
         run: |
           scp -i ~/.ssh/chuma_deploy /tmp/chuma-release.tgz "chuma-deploy@$CHUMA_DEPLOY_HOST:/tmp/chuma-release.tgz"
 
-      - name: Deploy
+      - name: Deploy and verify
         run: |
           ssh -i ~/.ssh/chuma_deploy "chuma-deploy@$CHUMA_DEPLOY_HOST" '
             set -eu
@@ -45,11 +58,11 @@ jobs:
             cd /opt/chuma/release/infra
             docker compose --env-file .env -f compose.yml config -q
             docker compose --env-file .env -f compose.yml up -d --build
-            for i in $(seq 1 30); do
+            for i in $(seq 1 36); do
               status="$(docker inspect --format '{{.State.Health.Status}}' chuma-platform-app-1 2>/dev/null || true)"
               if [ "$status" = "healthy" ]; then break; fi
               if [ "$status" = "unhealthy" ]; then
-                echo "CHUMA app healthcheck failed." >&2
+                docker compose --env-file .env -f compose.yml logs --tail=200 app || true
                 exit 1
               fi
               sleep 5
