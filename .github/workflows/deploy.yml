@@ -51,25 +51,54 @@ jobs:
           ssh -i ~/.ssh/chuma_deploy "chuma-deploy@$CHUMA_DEPLOY_HOST" '
             set -eu
             test -f /opt/chuma/infra/.env
+
+            SNAP=""
+            if [ -x /opt/chuma/agent/agent-backup.sh ] && [ -f /opt/chuma/release/infra/compose.yml ]; then
+              SNAP="$(/opt/chuma/agent/agent-backup.sh)"
+            elif [ -d /opt/chuma/release ]; then
+              STAMP="$(date +%Y%m%d-%H%M%S)"
+              SNAP="/opt/chuma/agent/backups/$STAMP"
+              mkdir -p "$SNAP"
+              chmod 700 "$SNAP"
+              tar --exclude-vcs --exclude="*/__pycache__" --exclude="*/.pytest_cache" -czf "$SNAP/release.tgz" -C /opt/chuma/release .
+            fi
+
             rm -rf /opt/chuma/release
             mkdir -p /opt/chuma/release
             tar -xzf /tmp/chuma-release.tgz -C /opt/chuma/release
             cp /opt/chuma/infra/.env /opt/chuma/release/infra/.env
+
             cd /opt/chuma/release/infra
             docker compose --env-file .env -f compose.yml config -q
             docker compose --env-file .env -f compose.yml up -d --build
+
             if [ -x /opt/chuma/release/infra/agent-install.sh ]; then
               /opt/chuma/release/infra/agent-install.sh
             fi
+
+            healthy=""
             for i in $(seq 1 36); do
               status="$(docker inspect --format '{{.State.Health.Status}}' chuma-platform-app-1 2>/dev/null || true)"
-              if [ "$status" = "healthy" ]; then break; fi
+              if [ "$status" = "healthy" ]; then
+                healthy="yes"
+                break
+              fi
               if [ "$status" = "unhealthy" ]; then
-                docker compose --env-file .env -f compose.yml logs --tail=200 app || true
-                exit 1
+                break
               fi
               sleep 5
             done
+
+            if [ "$healthy" != "yes" ]; then
+              docker compose --env-file .env -f compose.yml logs --tail=200 app || true
+              if [ -n "$SNAP" ] && [ -x /opt/chuma/agent/agent-rollback.sh ]; then
+                /opt/chuma/agent/agent-rollback.sh "$SNAP"
+              else
+                echo "No autonomous rollback helper/snapshot available." >&2
+                exit 1
+              fi
+            fi
+
             test "$(docker inspect --format '{{.State.Health.Status}}' chuma-platform-app-1)" = "healthy"
             docker compose --env-file .env -f compose.yml ps
           '
