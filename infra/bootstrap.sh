@@ -4,6 +4,7 @@ set -Eeuo pipefail
 APP_ROOT="${APP_ROOT:-/opt/chuma}"
 DEPLOY_USER="${DEPLOY_USER:-chuma-deploy}"
 DEPLOY_PUBLIC_KEY="${DEPLOY_PUBLIC_KEY:-}"
+GITHUB_KEY="${GITHUB_DEPLOY_KEY:-$APP_ROOT/agent/github_deploy_ed25519}"
 
 if [[ "$EUID" -ne 0 ]]; then
   echo "Run as root." >&2
@@ -14,7 +15,7 @@ export DEBIAN_FRONTEND=noninteractive
 
 echo "[bootstrap] Installing base packages..."
 apt-get update -qq
-apt-get install -y -qq ca-certificates curl openssh-server ufw openssl git >/dev/null
+apt-get install -y -qq ca-certificates curl openssh-server openssh-client ufw openssl git >/dev/null
 
 echo "[bootstrap] Ensuring Docker..."
 if ! command -v docker >/dev/null 2>&1; then
@@ -40,8 +41,25 @@ if [[ -n "$DEPLOY_PUBLIC_KEY" ]] && ! grep -Fqx "$DEPLOY_PUBLIC_KEY" "/home/$DEP
   printf '%s\n' "$DEPLOY_PUBLIC_KEY" >> "/home/$DEPLOY_USER/.ssh/authorized_keys"
 fi
 
-install -d -m 0755 "$APP_ROOT" "$APP_ROOT/infra"
+install -d -m 0755 "$APP_ROOT" "$APP_ROOT/infra" "$APP_ROOT/agent"
 chown "$DEPLOY_USER:$DEPLOY_USER" "$APP_ROOT"
+
+# Dedicated read-only GitHub repository identity. The private key never enters Git.
+if [[ ! -f "$GITHUB_KEY" ]]; then
+  umask 077
+  ssh-keygen -t ed25519 -N "" -C "chuma-vps-readonly" -f "$GITHUB_KEY" >/dev/null
+fi
+chmod 600 "$GITHUB_KEY"
+chmod 644 "${GITHUB_KEY}.pub"
+
+# Pin GitHub's SSH host key once so the updater does not trust arbitrary hosts.
+GITHUB_KNOWN_HOSTS="$APP_ROOT/agent/github_known_hosts"
+if [[ ! -s "$GITHUB_KNOWN_HOSTS" ]]; then
+  umask 077
+  ssh-keyscan -H github.com > "$GITHUB_KNOWN_HOSTS" 2>/dev/null
+  test -s "$GITHUB_KNOWN_HOSTS"
+  chmod 600 "$GITHUB_KNOWN_HOSTS"
+fi
 
 if [[ ! -f "$APP_ROOT/infra/.env" ]]; then
   umask 077
@@ -73,3 +91,4 @@ ufw allow 443/tcp >/dev/null
 ufw --force enable >/dev/null
 
 echo "[bootstrap] OK"
+echo "[bootstrap] GitHub public key: ${GITHUB_KEY}.pub"
