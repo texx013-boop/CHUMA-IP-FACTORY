@@ -42,6 +42,9 @@ jobs:
             touch "/opt/chuma/agent/$script"
             chmod 755 "/opt/chuma/agent/$script"
           done
+          mkdir -p /opt/chuma/infra
+          touch /opt/chuma/infra/backup.sh
+          chmod 755 /opt/chuma/infra/backup.sh
           for f in infra/*.service; do systemd-analyze verify "$f"; done
           test -f infra/chuma-backup.service
           test -f infra/chuma-backup.timer
