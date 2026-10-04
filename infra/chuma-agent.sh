@@ -12,8 +12,10 @@ CHECK_INTERVAL="${CHUMA_AGENT_INTERVAL:-30}"
 MODE="${CHUMA_AGENT_MODE:-safe}"
 mkdir -p "$STATE_DIR" "$BACKUP_DIR"
 chmod 700 "$STATE_DIR"
+touch "$LOG_FILE"
+chmod 600 "$LOG_FILE"
 log() { printf '%s %s\n' "$(date -Is)" "$*" | tee -a "$LOG_FILE"; }
-compose() { docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" "$@"; }
+compose() { "$INFRA_DIR/compose-run.sh" --env-file "$ENV_FILE" -f "$COMPOSE_FILE" "$@"; }
 healthy() { curl -fsS --max-time 5 http://127.0.0.1/health >/dev/null 2>&1; }
 exec 9>"$LOCK_FILE"
 flock -n 9 || exit 0
