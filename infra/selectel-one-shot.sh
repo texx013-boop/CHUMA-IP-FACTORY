@@ -39,10 +39,17 @@ echo "[4/7] Installing latest CHUMA..."
 rm -rf "$TMP"
 git clone --depth 1 "$REPO" "$TMP"
 if [[ -d "$ROOT" ]]; then
-  mv "$ROOT" "${ROOT}.previous-$(date +%Y%m%d-%H%M%S)"
+  PREVIOUS_ROOT="${ROOT}.previous-$(date +%Y%m%d-%H%M%S)"
+  mv "$ROOT" "$PREVIOUS_ROOT"
+else
+  PREVIOUS_ROOT=""
 fi
 mkdir -p "$ROOT"
 cp -a "$TMP"/. "$ROOT"/
+if [[ -n "$PREVIOUS_ROOT" && -f "$PREVIOUS_ROOT/infra/.env" ]]; then
+  cp "$PREVIOUS_ROOT/infra/.env" "$ROOT/infra/.env"
+  chmod 600 "$ROOT/infra/.env"
+fi
 rm -rf "$TMP"
 
 echo "[5/7] Bootstrapping server..."
