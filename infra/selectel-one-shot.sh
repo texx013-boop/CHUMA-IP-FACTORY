@@ -48,16 +48,16 @@ rm -rf "$TMP"
 echo "[5/7] Bootstrapping server..."
 cd "$ROOT"
 bash infra/bootstrap.sh
-cd "$ROOT/infra"
 
 echo "[6/7] Building and starting CHUMA..."
+cd "$ROOT/infra"
 "${COMPOSE[@]}" up -d --build
 "${COMPOSE[@]}" ps
 
 echo "[7/7] Verifying..."
 READY=0
 for i in $(seq 1 90); do
-  if curl -fsS --max-time 5 http://127.0.0.1:8097/health >/dev/null 2>&1; then
+  if curl -fsS --max-time 5 http://127.0.0.1/health >/dev/null 2>&1; then
     READY=1
     break
   fi
@@ -65,9 +65,12 @@ for i in $(seq 1 90); do
 done
 
 if [[ "$READY" -ne 1 ]]; then
-  echo "CHUMA HEALTH CHECK FAILED"
+  echo "CHUMA WEB HEALTH CHECK FAILED"
   "${COMPOSE[@]}" ps || true
-  "${COMPOSE[@]}" logs --tail=120 || true
+  echo "--- proxy logs ---"
+  "${COMPOSE[@]}" logs --tail=80 proxy || true
+  echo "--- app logs ---"
+  "${COMPOSE[@]}" logs --tail=80 app || true
   exit 5
 fi
 
@@ -79,8 +82,8 @@ echo
 echo "========================================"
 echo "CHUMA SERVER READY"
 echo "========================================"
-echo "Local health: http://127.0.0.1:8097/health"
 echo "Web UI:       http://$(hostname -I | awk '{print $1}')/"
+echo "Health:       http://$(hostname -I | awk '{print $1}')/health"
 echo "Control root: $ROOT"
 echo "Agent:        systemctl status chuma-agent"
 echo "========================================"
