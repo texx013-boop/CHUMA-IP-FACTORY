@@ -1,6 +1,5 @@
 {
     email {$ACME_EMAIL}
-    auto_https prefer_wildcards
 }
 
 {$CHUMA_DOMAIN} {
