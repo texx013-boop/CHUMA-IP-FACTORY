@@ -31,8 +31,15 @@ jobs:
           docker compose -f infra/compose.yml config -q
       - name: Docker build
         run: docker build -t chuma-ip-factory:ci .
+      - name: Infrastructure syntax checks
+        run: |
+          bash -n infra/bootstrap.sh
+          sh -n infra/backup.sh
+          test ! -f infra/.env
+          test ! -f infra/backups/.env
+          docker run --rm -v "$PWD/infra/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+
       - name: Docker build security check
         run: |
           test -f infra/.gitignore
-          test ! -f infra/.env
           grep -q "USER chuma" Dockerfile
