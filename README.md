@@ -85,3 +85,17 @@ Current Video Combain hardening includes tests for image → video chaining, ide
 - Artifact downloads verify owner scope, filesystem containment, and SHA-256 integrity before serving bytes.
 - Video Combain validates character/content/artifact provenance both at job creation and again immediately before rendering.
 - Video job listing supports an owner-scoped `character_id` filter and rejects foreign-character filters.
+
+## Autonomous server runtime
+
+The production server is designed to run as an autonomous control loop:
+
+- CHUMA Agent performs health recovery;
+- Auto Update Agent tracks the private GitHub repository through a dedicated read-only SSH deploy key;
+- Watchdog restarts failed agent services;
+- Security Agent checks runtime permissions and credential-like material;
+- daily PostgreSQL backups run through systemd and retain integrity hashes;
+- failed deployments restore the previous release and verify health before accepting the result;
+- runtime secrets remain outside Git.
+
+The GitHub repository remains private. The server-side updater therefore never downloads source through a public archive URL; it requires its dedicated repository read key. GitHub deploy keys are repository-scoped and can be read-only. citeturn0search0turn0search3
