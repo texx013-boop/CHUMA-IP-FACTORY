@@ -67,6 +67,9 @@ while true; do
         if docker compose --env-file "$RELEASE_DIR/infra/.env" -f "$RELEASE_DIR/infra/compose.yml" up -d --build; then
           for i in $(seq 1 36); do healthy && break; sleep 5; done
           if healthy; then
+            if [[ -x "$RELEASE_DIR/infra/agent-install.sh" ]]; then
+              "$RELEASE_DIR/infra/agent-install.sh" >/dev/null 2>&1 || log "agent refresh failed"
+            fi
             printf '%s\n' "$SHA" > "$STATE_DIR/deployed_sha"
             log "deployment successful: $SHA"
           else
