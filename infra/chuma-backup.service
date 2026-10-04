@@ -1,0 +1,16 @@
+[Unit]
+Description=CHUMA PostgreSQL Backup
+After=docker.service chuma-agent.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/opt/chuma/infra
+Environment=APP_ROOT=/opt/chuma
+ExecStart=/opt/chuma/infra/backup.sh
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ReadWritePaths=/opt/chuma
+
