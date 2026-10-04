@@ -200,6 +200,44 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLower
 </html>"""
         b=html.encode('utf-8'); self.send_response(200); self.send_header('Content-Type','text/html; charset=utf-8'); self.send_header('Cache-Control','no-store, no-cache, must-revalidate, max-age=0'); self.send_header('Pragma','no-cache'); self.send_header('Expires','0'); self.send_header('Content-Length',str(len(b))); self.end_headers(); self.wfile.write(b)
 
+    def do_HEAD(self):
+        # Browser/proxy health checks commonly use HEAD. Mirror GET status
+        # without writing a response body, so a reachable service never
+        # reports the misleading BaseHTTPRequestHandler 501.
+        p = urllib.parse.urlsplit(self.path).path
+        if p in ('/','/ui','/gallery'):
+            b = b''
+            self.send_response(200)
+            self.send_header('Content-Type','text/html; charset=utf-8')
+            self.send_header('Cache-Control','no-store, no-cache, must-revalidate, max-age=0')
+            self.send_header('Content-Length','0')
+            self.end_headers()
+            return
+        if p == '/health':
+            body = json.dumps({'status':'ok','version':VERSION}, ensure_ascii=False).encode()
+            self.send_response(200)
+            self.send_header('Content-Type','application/json; charset=utf-8')
+            self.send_header('Cache-Control','no-store')
+            self.send_header('Content-Length',str(len(body)))
+            self.end_headers()
+            return
+        if p == '/ready':
+            try:
+                self.factory.store.one('SELECT 1')
+                body = json.dumps({'status':'ready','version':VERSION}, ensure_ascii=False).encode()
+                self.send_response(200)
+            except Exception:
+                body = json.dumps({'status':'not_ready'}, ensure_ascii=False).encode()
+                self.send_response(503)
+            self.send_header('Content-Type','application/json; charset=utf-8')
+            self.send_header('Cache-Control','no-store')
+            self.send_header('Content-Length',str(len(body)))
+            self.end_headers()
+            return
+        self.send_response(404)
+        self.send_header('Content-Length','0')
+        self.end_headers()
+
     def do_GET(self):
         p = urllib.parse.urlsplit(self.path).path
         if p in ('/','/ui','/gallery'):
