@@ -92,3 +92,5 @@ ufw --force enable >/dev/null
 
 echo "[bootstrap] OK"
 echo "[bootstrap] GitHub public key: ${GITHUB_KEY}.pub"
+echo "[bootstrap] Add this PUBLIC key to the private repository Deploy Keys (read-only):"
+cat "${GITHUB_KEY}.pub"
