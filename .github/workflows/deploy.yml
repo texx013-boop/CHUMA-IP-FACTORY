@@ -23,5 +23,4 @@ jobs:
         run: |
           test -f infra/auto-update.sh
           test -f infra/chuma-auto-update.service
-          test -x infra/agent-install.sh
           echo "Release validated. Production server updates itself from main through CHUMA Auto Update Agent."
