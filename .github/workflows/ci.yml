@@ -27,6 +27,7 @@ jobs:
           python -m pip install pyyaml
           python -c "import yaml; yaml.safe_load(open('render.yaml')); print('render.yaml: OK')"
           python -c "import yaml; yaml.safe_load(open('infra/compose.yml')); print('infra/compose.yml: YAML OK')"
+          python -c "import yaml; yaml.safe_load(open('.github/workflows/deploy.yml')); print('deploy.yml: YAML OK')"
           docker compose config -q
           docker compose -f infra/compose.yml config -q
       - name: Docker build
