@@ -98,4 +98,4 @@ The production server is designed to run as an autonomous control loop:
 - failed deployments restore the previous release and verify health before accepting the result;
 - runtime secrets remain outside Git.
 
-The GitHub repository remains private. The server-side updater therefore never downloads source through a public archive URL; it requires its dedicated repository read key. GitHub deploy keys are repository-scoped and can be read-only. citeturn0search0turn0search3
+The GitHub repository remains private. The server-side updater therefore never downloads source through a public archive URL; it requires its dedicated repository read key. GitHub deploy keys are repository-scoped and can be read-only.
