@@ -37,6 +37,11 @@ jobs:
           bash -n infra/bootstrap.sh
           for f in infra/*.sh; do bash -n "$f"; done
           sh -n infra/backup.sh
+          mkdir -p /opt/chuma/agent
+          for script in chuma-agent.sh auto-update.sh chuma-watchdog.sh chuma-security-agent.sh; do
+            touch "/opt/chuma/agent/$script"
+            chmod 755 "/opt/chuma/agent/$script"
+          done
           for f in infra/*.service; do systemd-analyze verify "$f"; done
           test ! -f infra/.env
           test ! -f infra/backups/.env
