@@ -8,10 +8,17 @@ mkdir -p "$BACKUP_DIR"
 
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 FILE="$BACKUP_DIR/chuma-postgres-$STAMP.sql.gz"
+TMP="$FILE.tmp"
 
-docker compose exec -T db sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" --no-owner --no-privileges' | gzip -9 > "$FILE"
+cleanup() {
+  rm -f "$TMP"
+}
+trap cleanup EXIT INT TERM
 
-test -s "$FILE"
+docker compose exec -T db sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" --no-owner --no-privileges' | gzip -9 > "$TMP"
+test -s "$TMP"
+mv -f "$TMP" "$FILE"
+
 find "$BACKUP_DIR" -type f -name 'chuma-postgres-*.sql.gz' -mtime +"$RETENTION_DAYS" -delete
 
 echo "backup created: $FILE"
