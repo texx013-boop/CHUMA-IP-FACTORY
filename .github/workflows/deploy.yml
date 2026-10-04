@@ -2,8 +2,6 @@ name: CHUMA Deploy
 
 on:
   workflow_dispatch:
-  push:
-    branches: ["main"]
 
 concurrency:
   group: chuma-production
@@ -13,9 +11,6 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
       - name: Prepare SSH
         env:
           CHUMA_DEPLOY_PRIVATE_KEY: ${{ secrets.CHUMA_DEPLOY_PRIVATE_KEY }}
@@ -44,10 +39,12 @@ jobs:
         run: |
           ssh -i ~/.ssh/chuma_deploy "chuma-deploy@$CHUMA_DEPLOY_HOST" '
             set -eu
+            test -f /opt/chuma/infra/.env
+            rm -rf /opt/chuma/release
             mkdir -p /opt/chuma/release
             tar -xzf /tmp/chuma-release.tgz -C /opt/chuma/release
+            cp /opt/chuma/infra/.env /opt/chuma/release/infra/.env
             cd /opt/chuma/release/infra
-            test -f .env
             docker compose --env-file .env -f compose.yml config -q
             docker compose --env-file .env -f compose.yml up -d --build
             docker compose --env-file .env -f compose.yml ps
