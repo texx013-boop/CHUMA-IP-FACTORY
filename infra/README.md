@@ -68,3 +68,14 @@ curl -fsS https://$CHUMA_DOMAIN/ready
 - Review backup restoration periodically.
 
 This repository contains the deployment template only. It does **not** contain VPS credentials or perform the external provider purchase/login step.
+## First VPS deployment
+
+The first production deployment intentionally requires one external setup action: the VPS must receive a production `infra/.env` containing the real domain, database password and CHUMA admin token. This file is never committed to Git and is preserved across application releases.
+
+After the server bootstrap is complete, deployment is performed by the manually triggered GitHub Actions workflow. The workflow uploads a source release only; it does not contain or retrieve production secrets from the repository.
+
+For the first deployment, keep the existing portable Operator SSH key for human administration. The separate CI/CD Deployment Key is optional until automated deployment is activated.
+
+## Backup policy
+
+The scheduled backup creates atomic PostgreSQL dumps locally under `infra/backups/`. Local backups are not a disaster-recovery substitute. Before declaring production complete, configure an off-site copy and perform at least one restore test on an isolated database.
