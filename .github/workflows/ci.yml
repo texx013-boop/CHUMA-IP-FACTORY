@@ -35,6 +35,7 @@ jobs:
       - name: Infrastructure syntax checks
         run: |
           bash -n infra/bootstrap.sh
+          bash -n infra/auto-update.sh
           sh -n infra/backup.sh
           test ! -f infra/.env
           test ! -f infra/backups/.env
