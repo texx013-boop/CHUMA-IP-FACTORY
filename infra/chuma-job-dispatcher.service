@@ -1,0 +1,16 @@
+[Unit]
+Description=CHUMA Job Dispatcher
+After=docker.service chuma-control.service
+Requires=chuma-control.service
+
+[Service]
+Type=simple
+User=root
+ExecStart=/opt/chuma/agent/chuma-job-dispatcher.sh
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/opt/chuma/control /opt/chuma/agent
