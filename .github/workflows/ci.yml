@@ -55,6 +55,8 @@ jobs:
           grep -q 'gzip -t "\$latest"' infra/backup-verify.sh
           grep -q 'auth_rate_limited' chuma_ip_factory/api.py
           grep -q 'Retry-After' chuma_ip_factory/api.py
+          grep -q 'asset_path_forbidden' chuma_ip_factory/core.py
+          grep -q 'tmp.replace(path)' chuma_ip_factory/core.py
           grep -q 'chuma-agent.service chuma-auto-update.service chuma-watchdog.service chuma-security-agent.service' infra/agent-install.sh
           grep -q 'systemctl enable --now chuma-backup.timer' infra/agent-install.sh
           for unit in chuma-agent.service chuma-auto-update.service chuma-watchdog.service chuma-security-agent.service chuma-backup.service chuma-backup.timer; do
