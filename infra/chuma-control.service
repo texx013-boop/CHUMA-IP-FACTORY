@@ -8,7 +8,7 @@ Requires=docker.service
 Type=oneshot
 User=root
 Environment=APP_ROOT=/opt/chuma
-ExecStart=/opt/chuma/agent/chuma-control.sh status
+ExecStart=/opt/chuma/agent/chuma-control.sh health
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=full
