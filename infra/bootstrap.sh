@@ -44,6 +44,18 @@ fi
 install -d -m 0755 "$APP_ROOT" "$APP_ROOT/infra" "$APP_ROOT/agent"
 chown "$DEPLOY_USER:$DEPLOY_USER" "$APP_ROOT"
 
+# CHUMA Control plane: production authority independent of any code-hosting provider.
+CONTROL_ROOT="$APP_ROOT/control"
+install -d -m 0700 "$CONTROL_ROOT" "$CONTROL_ROOT/state" "$CONTROL_ROOT/projects" "$CONTROL_ROOT/incoming" "$CONTROL_ROOT/releases"
+cat > "$CONTROL_ROOT/projects/registry.env" <<EOF
+# CHUMA project registry.
+SHUMA_SPACE=enabled
+FILM_COMBAIN=enabled
+PERSONAL_AI_COMPANION=enabled
+EOF
+chmod 600 "$CONTROL_ROOT/projects/registry.env"
+chown -R root:root "$CONTROL_ROOT"
+
 # Dedicated read-only GitHub repository identity. The private key never enters Git.
 if [[ ! -f "$GITHUB_KEY" ]]; then
   umask 077
@@ -91,6 +103,7 @@ ufw allow 443/tcp >/dev/null
 ufw --force enable >/dev/null
 
 echo "[bootstrap] OK"
-echo "[bootstrap] GitHub public key: ${GITHUB_KEY}.pub"
-echo "[bootstrap] Add this PUBLIC key to the private repository Deploy Keys (read-only):"
+echo "[bootstrap] CHUMA Control plane: $CONTROL_ROOT"
+echo "[bootstrap] GitHub read-only source adapter key: ${GITHUB_KEY}.pub"
+echo "[bootstrap] GitHub remains optional as a source adapter during the Control-plane migration."
 cat "${GITHUB_KEY}.pub"
