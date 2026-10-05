@@ -194,9 +194,15 @@ while true; do
   fi
 
   mkdir -p "$TMP/source"
-  if ! git -C "$TMP/repo" archive "$SHA" -o "$TMP/release.tar"; then
-    log "release archive creation failed"
-    trap - EXIT; cleanup; sleep "$INTERVAL"; continue
+  if ! git -C "$TMP/repo" archive --format=tar HEAD -o "$TMP/release.tar" 2>"$TMP/archive.err"; then
+    ARCHIVE_ERR="$(tr '\n' ' ' < "$TMP/archive.err" 2>/dev/null || true)"
+    log "release archive creation failed: ${ARCHIVE_ERR:-unknown error}"
+    if ! tar --exclude=.git -cf "$TMP/release.tar" -C "$TMP/repo" . 2>"$TMP/archive-fallback.err"; then
+      FALLBACK_ERR="$(tr '\n' ' ' < "$TMP/archive-fallback.err" 2>/dev/null || true)"
+      log "release archive fallback failed: ${FALLBACK_ERR:-unknown error}"
+      trap - EXIT; cleanup; sleep "$INTERVAL"; continue
+    fi
+    log "release archive fallback succeeded"
   fi
   if ! tar -xf "$TMP/release.tar" -C "$TMP/source"; then
     log "release archive extraction failed"
