@@ -1,18 +1,22 @@
 [Unit]
-Description=CHUMA Control Plane State Check
+Description=CHUMA Control Plane State Check and Remote Control Agent
 After=network-online.target docker.service
 Wants=network-online.target
 Requires=docker.service
 
 [Service]
-Type=oneshot
+Type=simple
 User=root
 Environment=APP_ROOT=/opt/chuma
-ExecStart=/opt/chuma/agent/chuma-control.sh reconcile
-NoNewPrivileges=true
+ExecStart=/usr/bin/python3 /opt/chuma/agent/chuma-control-api.py
+Restart=always
+RestartSec=2
+NoNewPrivileges=false
 PrivateTmp=true
 ProtectSystem=full
-ReadWritePaths=/opt/chuma
+ReadWritePaths=/opt/chuma /run
+StandardOutput=append:/opt/chuma/control/state/control-api.log
+StandardError=append:/opt/chuma/control/state/control-api.log
 
 [Install]
 WantedBy=multi-user.target
