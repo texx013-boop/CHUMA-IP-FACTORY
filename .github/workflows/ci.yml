@@ -50,6 +50,9 @@ jobs:
           test -f infra/chuma-backup.timer
           test -f infra/github-access.sh
           test -f infra/backup-verify.sh
+          grep -q 'sha256sum "\$FILE" > "\$FILE.sha256"' infra/backup.sh
+          grep -q 'sha256sum -c "\$checksum"' infra/backup-verify.sh
+          grep -q 'gzip -t "\$latest"' infra/backup-verify.sh
           grep -q 'chuma-agent.service chuma-auto-update.service chuma-watchdog.service chuma-security-agent.service' infra/agent-install.sh
           grep -q 'systemctl enable --now chuma-backup.timer' infra/agent-install.sh
           for unit in chuma-agent.service chuma-auto-update.service chuma-watchdog.service chuma-security-agent.service chuma-backup.service chuma-backup.timer; do
