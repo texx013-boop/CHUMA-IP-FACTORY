@@ -36,7 +36,7 @@ run_job(){
    log "job=$id blocked: executor missing"
    return
  fi
- local output rc
+ local output rc verify_rc=0
  set +e
  output=$(timeout 1800 "$executor" "$id" "$task" 2>&1); rc=$?
  set -e
