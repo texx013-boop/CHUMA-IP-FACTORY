@@ -14,6 +14,7 @@ install -m 0755 "$INFRA_DIR/chuma-watchdog.sh" "$AGENT_DIR/chuma-watchdog.sh"
 install -m 0755 "$INFRA_DIR/chuma-security-agent.sh" "$AGENT_DIR/chuma-security-agent.sh"
 install -m 0755 "$INFRA_DIR/github-access.sh" "$AGENT_DIR/github-access.sh"
 install -m 0755 "$INFRA_DIR/backup-verify.sh" "$AGENT_DIR/backup-verify.sh"
+install -m 0755 "$INFRA_DIR/chuma-control.sh" "$AGENT_DIR/chuma-control.sh"
 
 install -m 0644 "$INFRA_DIR/chuma-agent.service" /etc/systemd/system/chuma-agent.service
 install -m 0644 "$INFRA_DIR/chuma-auto-update.service" /etc/systemd/system/chuma-auto-update.service
@@ -21,9 +22,11 @@ install -m 0644 "$INFRA_DIR/chuma-watchdog.service" /etc/systemd/system/chuma-wa
 install -m 0644 "$INFRA_DIR/chuma-security-agent.service" /etc/systemd/system/chuma-security-agent.service
 install -m 0644 "$INFRA_DIR/chuma-backup.service" /etc/systemd/system/chuma-backup.service
 install -m 0644 "$INFRA_DIR/chuma-backup.timer" /etc/systemd/system/chuma-backup.timer
+install -m 0644 "$INFRA_DIR/chuma-control.service" /etc/systemd/system/chuma-control.service
+install -m 0644 "$INFRA_DIR/chuma-control.timer" /etc/systemd/system/chuma-control.timer
 
 systemctl daemon-reload
 systemctl enable --now chuma-agent.service chuma-auto-update.service chuma-watchdog.service chuma-security-agent.service
-systemctl enable --now chuma-backup.timer
+systemctl enable --now chuma-backup.timer chuma-control.timer
 
-echo "CHUMA Agent, Watchdog, Security Agent and Backup Timer installed and running."
+echo "CHUMA Agent, Watchdog, Security Agent, Backup Timer and Control Timer installed and running."
