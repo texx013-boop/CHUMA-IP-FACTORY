@@ -52,6 +52,11 @@ intelligence() {
   "$APP_ROOT/agent/chuma-intelligence.sh" "$@"
 }
 
+intelligence() {
+  [[ $# -ge 2 ]] || { printf 'Usage: chuma-control.sh intelligence <command> <project> ...\n' >&2; return 64; }
+  "$APP_ROOT/agent/chuma-intelligence.sh" "$@"
+}
+
 workspace() {
   [[ $# -ge 2 ]] || { printf 'Usage: chuma-control.sh workspace {status|resume|stop} <project>\n' >&2; return 64; }
   "$APP_ROOT/agent/chuma-workspace.sh" "$@"
