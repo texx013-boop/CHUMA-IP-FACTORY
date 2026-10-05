@@ -76,8 +76,11 @@ def jobq(cmd, *extra):
 def capability(mode, risk):
     return run(str(APP_ROOT/"agent/chuma-capability-firewall.sh"),"check",mode,risk)
 
-def task_meta(task):
-    return run(str(APP_ROOT/"agent/chuma-task-language.sh"),"parse",task)
+def task_meta(project, task):
+    return run(str(APP_ROOT/"agent/chuma-task-language.sh"),"parse",project,task)
+
+def operation_meta(project, operation):
+    return run(str(APP_ROOT/"agent/chuma-operation-registry.sh"),"meta",project,operation)
 
 def parse_kv(s):
     out={}
@@ -129,6 +132,9 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers()
             return
         if not self.auth(): return self.sendj(401,{"error":"unauthorized"})
+        if path=="/api/operations":
+            rc,out,err=run(str(APP_ROOT/"agent/chuma-operation-registry.sh"),"list")
+            return self.sendj(200 if rc==0 else 409,{"ok":rc==0,"raw":out})
         if path=="/api/status":
             services={}
             for unit in ("chuma-agent.service","chuma-auto-update.service","chuma-watchdog.service","chuma-security-agent.service","chuma-control.service"):
@@ -205,6 +211,39 @@ class Handler(BaseHTTPRequestHandler):
         path=self.path.split("?",1)[0]
         try: data=self.body()
         except Exception: return self.sendj(400,{"error":"invalid_json"})
+        m=re.fullmatch(r"/api/jobs/(JOB-[0-9]{8})/(approve|deny)",path)
+        if m:
+            job_id,decision=m.group(1),m.group(2)
+            rc,out,err=jobq("get",job_id)
+            if rc!=0: return self.sendj(404,{"error":"job_not_found"})
+            gate=str(APP_ROOT/"agent/chuma-approval-gate.sh")
+            gr,go,ge=run(gate,decision,job_id)
+            if gr!=0: return self.sendj(409,{"error":"approval_update_failed","detail":ge})
+            if decision=="approve":
+                jobq("set-status",job_id,"QUEUED")
+            else:
+                jobq("set-status",job_id,"CANCELLED","","owner_denied")
+            return self.sendj(200,{"ok":True,"job_id":job_id,"decision":decision})
+        if path=="/api/jobs":
+            project=str(data.get("project","")).strip()
+            task=str(data.get("task","")).strip()
+            session=str(data.get("session","mobile-control")).strip() or "mobile-control"
+            if not SAFE_PROJECT.fullmatch(project) or not SAFE_TASK.fullmatch(task):
+                return self.sendj(400,{"error":"invalid_request"})
+            meta_rc,meta_out,meta_err=task_meta(project,task)
+            meta=parse_kv(meta_out) if meta_rc==0 else {}
+            if meta_rc!=0: return self.sendj(403,{"error":"task_not_allowed","detail":meta_err or "unknown_operation"})
+            operation=meta.get("operation","")
+            om_rc,om_out,om_err=operation_meta(project,operation)
+            om=parse_kv(om_out) if om_rc==0 else {}
+            if om_rc!=0: return self.sendj(403,{"error":"operation_not_registered"})
+            mode=meta.get("mode","NORMAL"); risk=meta.get("risk",om.get("risk","READ")); cap=meta.get("capability",om.get("capability","READ"))
+            if (CONTROL_ROOT/"state/SAFE_MODE").exists(): return self.sendj(423,{"error":"safe_mode"})
+            if capability(mode,cap)[0]!=0: return self.sendj(403,{"error":"capability_denied"})
+            jrc,jout,jerr=jobq("create",project,task,mode,session,risk)
+            if jrc!=0: return self.sendj(409,{"error":"job_create_failed","detail":jerr})
+            job_id=jout.splitlines()[-1].strip()
+            return self.sendj(202,{"ok":True,"project":project,"operation":operation,"job_id":job_id,"mode":mode,"risk":risk})
         if path!="/api/intent": return self.sendj(404,{"error":"not_found"})
         project=str(data.get("project","")).strip()
         intent=str(data.get("intent","")).strip()
@@ -218,15 +257,23 @@ class Handler(BaseHTTPRequestHandler):
             rc,out,err=workspace("stop",project)
         elif intent in ("set-task","create-job"):
             if not SAFE_TASK.fullmatch(task): return self.sendj(400,{"error":"invalid_task"})
-            meta_rc,meta_out,meta_err=task_meta(task)
+            meta_rc,meta_out,meta_err=task_meta(project,task)
             meta=parse_kv(meta_out) if meta_rc==0 else {}
-            mode=str(data.get("mode") or meta.get("mode") or "NORMAL")
-            risk=str(data.get("risk") or meta.get("risk") or "WRITE")
+            if meta_rc!=0 or meta.get("project") != project:
+                return self.sendj(403,{"error":"task_not_allowed","detail":meta_err or "unknown_operation"})
+            operation=meta.get("operation","")
+            om_rc,om_out,om_err=operation_meta(project,operation)
+            om=parse_kv(om_out) if om_rc==0 else {}
+            if om_rc!=0:
+                return self.sendj(403,{"error":"operation_not_registered","operation":operation})
+            mode=str(meta.get("mode") or "NORMAL")
+            risk=str(meta.get("risk") or om.get("risk") or "READ")
+            cap=str(meta.get("capability") or om.get("capability") or "READ")
             if (CONTROL_ROOT/"state/SAFE_MODE").exists():
                 return self.sendj(423,{"error":"safe_mode","message":"new execution jobs are blocked"})
-            cap_rc,cap_out,cap_err=capability(mode,risk)
+            cap_rc,cap_out,cap_err=capability(mode,cap)
             if cap_rc!=0:
-                return self.sendj(403,{"error":"capability_denied","mode":mode,"risk":risk})
+                return self.sendj(403,{"error":"capability_denied","mode":mode,"capability":cap})
             jrc,jout,jerr=jobq("create",project,task,mode,session,risk)
             if jrc!=0:
                 return self.sendj(409,{"error":"job_create_failed","detail":jerr})
@@ -237,12 +284,13 @@ class Handler(BaseHTTPRequestHandler):
                 approval="PENDING" if ar==0 else "GATE_ERROR"
                 if ar==0:
                     jobq("set-status",job_id,"BLOCKED","", "owner_approval_required")
-                    return self.sendj(202,{"ok":True,"intent":intent,"project":project,"job_id":job_id,"mode":mode,"risk":risk,"approval":approval})
-            rc,out,err=workspace("set-task",project,task)
-            if rc==0:
-                return self.sendj(200,{"ok":True,"intent":intent,"project":project,"job_id":job_id,"mode":mode,"risk":risk,"approval":approval,"output":out})
-            jobq("set-status",job_id,"FAILED","","workspace_set_task_failed")
-            return self.sendj(409,{"ok":False,"intent":intent,"project":project,"job_id":job_id,"output":out,"error":err})
+                    return self.sendj(202,{"ok":True,"intent":intent,"project":project,"operation":operation,"job_id":job_id,"mode":mode,"risk":risk,"approval":approval})
+            if operation=="SET_TASK":
+                rc,out,err=workspace("set-task",project,task)
+                if rc!=0:
+                    jobq("set-status",job_id,"FAILED","","workspace_set_task_failed")
+                    return self.sendj(409,{"ok":False,"intent":intent,"project":project,"operation":operation,"job_id":job_id,"output":out,"error":err})
+            return self.sendj(200,{"ok":True,"intent":intent,"project":project,"operation":operation,"job_id":job_id,"mode":mode,"risk":risk,"approval":approval})
         elif intent=="safe-mode-on":
             rc,out,err=run(str(APP_ROOT/"agent/chuma-workspace.sh"),"safe-mode","on")
         elif intent=="safe-mode-off":
