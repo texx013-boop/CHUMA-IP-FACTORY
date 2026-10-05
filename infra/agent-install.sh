@@ -21,6 +21,8 @@ install -m 0755 "$INFRA_DIR/chuma-job-queue.sh" "$AGENT_DIR/chuma-job-queue.sh"
 install -m 0755 "$INFRA_DIR/chuma-capability-firewall.sh" "$AGENT_DIR/chuma-capability-firewall.sh"
 install -m 0755 "$INFRA_DIR/chuma-server-registry.sh" "$AGENT_DIR/chuma-server-registry.sh"
 install -m 0755 "$INFRA_DIR/chuma-task-language.sh" "$AGENT_DIR/chuma-task-language.sh"
+install -m 0755 "$INFRA_DIR/chuma-owner-identity.sh" "$AGENT_DIR/chuma-owner-identity.sh"
+install -m 0755 "$INFRA_DIR/chuma-approval-gate.sh" "$AGENT_DIR/chuma-approval-gate.sh"
 install -m 0755 "$INFRA_DIR/chuma-intelligence.sh" "$AGENT_DIR/chuma-intelligence.sh"
 install -m 0755 "$INFRA_DIR/chuma-release.sh" "$AGENT_DIR/chuma-release.sh"
 
