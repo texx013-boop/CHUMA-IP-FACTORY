@@ -66,6 +66,8 @@ jobs:
           grep -q 'health) health' infra/chuma-control.sh
           grep -q 'release) release' infra/chuma-control.sh
           grep -q 'chuma-release.sh' infra/agent-install.sh
+          grep -q 'chuma-workspace.sh' infra/agent-install.sh
+          grep -q 'workspace)' infra/chuma-control.sh
           grep -q 'app.health=ok' infra/chuma-control.sh
           grep -q 'systemctl enable --now chuma-backup.timer chuma-control.timer' infra/agent-install.sh
           grep -q 'sha256sum "\$FILE" > "\$FILE.sha256"' infra/backup.sh
