@@ -3,6 +3,7 @@
 
     @control path /control/api/*
     handle @control {
+        uri strip_prefix /control
         reverse_proxy unix//opt/chuma/control/control.sock
     }
 
