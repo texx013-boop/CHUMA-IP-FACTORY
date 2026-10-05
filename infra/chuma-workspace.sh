@@ -21,6 +21,7 @@ Usage:
   chuma-workspace.sh open <project> <session>
   chuma-workspace.sh lock <project> <session> [lease_seconds]
   chuma-workspace.sh release <project> <session>
+  chuma-workspace.sh set-task <project> <task>
   chuma-workspace.sh stop <project>
   chuma-workspace.sh history <project>
   chuma-workspace.sh safe-mode <on|off|status>
@@ -184,6 +185,106 @@ open_workspace() {
   lock "$project" "$session"
   printf 'workspace.open=ok
 '
+}
+
+set_task() {
+  local project="$1" task="$2" file
+  ensure_state "$project"
+  [[ -n "$task" && "$task" != *
+  local project="$1" file
+  ensure_state "$project"
+  file="$(state_file "$project")"
+  expire_lock_if_needed "$project"
+  if [[ -d "$(lock_dir "$project")" ]]; then rm -rf -- "$(lock_dir "$project")"; fi
+  sed -i 's/^workspace_lock=.*/workspace_lock=none/; s/^workspace_session=.*/workspace_session=/; s/^workspace_lease_expires=.*/workspace_lease_expires=/; s/^task_status=.*/task_status=stopped/; s/^updated_at=.*/updated_at='"$(date -Is)"'/' "$file"
+  record "$project" stop "ok"
+  printf 'workspace.stop=ok
+'
+}
+
+history() {
+  local project="$1" file
+  ensure_state "$project"
+  file="$(history_file "$project")"
+  if [[ -f "$file" ]]; then cat "$file"; else printf 'history=empty
+'; fi
+}
+
+safe_mode() {
+  case "$1" in
+    on) umask 077; printf '%s\n' "$(date -Is)" > "$SAFE_MODE_FILE"; chmod 600 "$SAFE_MODE_FILE"; printf 'safe_mode=on\n' ;;
+    off) rm -f -- "$SAFE_MODE_FILE"; printf 'safe_mode=off\n' ;;
+    status) [[ -f "$SAFE_MODE_FILE" ]] && printf 'safe_mode=on\n' || printf 'safe_mode=off\n' ;;
+    *) echo "Usage: safe-mode <on|off|status>" >&2; return 64 ;;
+  esac
+}
+
+case "${1:-}" in
+  status|resume|history)
+    [[ $# -eq 2 ]] || { usage >&2; exit 64; }; "$1" "$2" ;;
+  open)
+    [[ $# -eq 3 ]] || { usage >&2; exit 64; }; open_workspace "$2" "$3" ;;
+  lock)
+    [[ $# -ge 3 && $# -le 4 ]] || { usage >&2; exit 64; }; lock "$2" "$3" "${4:-$DEFAULT_LEASE_SECONDS}" ;;
+  release)
+    [[ $# -eq 3 ]] || { usage >&2; exit 64; }; release "$2" "$3" ;;
+  stop)
+    [[ $# -eq 2 ]] || { usage >&2; exit 64; }; stop "$2" ;;
+  safe-mode)
+    [[ $# -eq 2 ]] || { usage >&2; exit 64; }; safe_mode "$2" ;;
+  *) usage >&2; exit 64 ;;
+esac
+\n'* && "$task" != *
+  local project="$1" file
+  ensure_state "$project"
+  file="$(state_file "$project")"
+  expire_lock_if_needed "$project"
+  if [[ -d "$(lock_dir "$project")" ]]; then rm -rf -- "$(lock_dir "$project")"; fi
+  sed -i 's/^workspace_lock=.*/workspace_lock=none/; s/^workspace_session=.*/workspace_session=/; s/^workspace_lease_expires=.*/workspace_lease_expires=/; s/^task_status=.*/task_status=stopped/; s/^updated_at=.*/updated_at='"$(date -Is)"'/' "$file"
+  record "$project" stop "ok"
+  printf 'workspace.stop=ok
+'
+}
+
+history() {
+  local project="$1" file
+  ensure_state "$project"
+  file="$(history_file "$project")"
+  if [[ -f "$file" ]]; then cat "$file"; else printf 'history=empty
+'; fi
+}
+
+safe_mode() {
+  case "$1" in
+    on) umask 077; printf '%s\n' "$(date -Is)" > "$SAFE_MODE_FILE"; chmod 600 "$SAFE_MODE_FILE"; printf 'safe_mode=on\n' ;;
+    off) rm -f -- "$SAFE_MODE_FILE"; printf 'safe_mode=off\n' ;;
+    status) [[ -f "$SAFE_MODE_FILE" ]] && printf 'safe_mode=on\n' || printf 'safe_mode=off\n' ;;
+    *) echo "Usage: safe-mode <on|off|status>" >&2; return 64 ;;
+  esac
+}
+
+case "${1:-}" in
+  status|resume|history)
+    [[ $# -eq 2 ]] || { usage >&2; exit 64; }; "$1" "$2" ;;
+  open)
+    [[ $# -eq 3 ]] || { usage >&2; exit 64; }; open_workspace "$2" "$3" ;;
+  lock)
+    [[ $# -ge 3 && $# -le 4 ]] || { usage >&2; exit 64; }; lock "$2" "$3" "${4:-$DEFAULT_LEASE_SECONDS}" ;;
+  release)
+    [[ $# -eq 3 ]] || { usage >&2; exit 64; }; release "$2" "$3" ;;
+  stop)
+    [[ $# -eq 2 ]] || { usage >&2; exit 64; }; stop "$2" ;;
+  safe-mode)
+    [[ $# -eq 2 ]] || { usage >&2; exit 64; }; safe_mode "$2" ;;
+  *) usage >&2; exit 64 ;;
+esac
+\r'* && ${#task} -le 2000 ]] || { echo "invalid task" >&2; return 64; }
+  file="$(state_file "$project")"
+  sed -i \
+    "s/^current_task=.*/current_task=$task/; s/^task_status=.*/task_status=queued/; s/^next_action=.*/next_action=execute_task/; s/^updated_at=.*/updated_at=$(date -Is)/" \
+    "$file"
+  record "$project" task_queued "ok"
+  printf 'workspace.task=queued\nproject=%s\n' "$project"
 }
 
 stop() {
