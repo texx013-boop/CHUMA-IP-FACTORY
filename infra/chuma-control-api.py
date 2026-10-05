@@ -116,7 +116,7 @@ class Handler(BaseHTTPRequestHandler):
         if path=="/api/auth/logout":
             SESSION_FILE.unlink(missing_ok=True)
             self.send_response(200)
-            self.send_header("Set-Cookie","chuma_session=; Path=/control; Max-Age=0; HttpOnly; SameSite=Strict; Secure")
+            self.send_header("Set-Cookie","chuma_session=; Path=/control; Max-Age=0; HttpOnly; SameSite=Strict")
             self.end_headers()
             return
         if not self.auth(): return self.sendj(401,{"error":"unauthorized"})
