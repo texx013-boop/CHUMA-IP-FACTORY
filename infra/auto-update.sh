@@ -26,6 +26,22 @@ compose() { "$APP_ROOT/infra/compose-run.sh" --env-file "$1" -f "$2" "${@:3}"; }
 GIT_SSH_COMMAND="ssh -i $GITHUB_KEY -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$KNOWN_HOSTS"
 git_env=(env GIT_SSH_COMMAND="$GIT_SSH_COMMAND")
 remote_sha() { "${git_env[@]}" git ls-remote "$REPO" "refs/heads/$BRANCH" | awk 'NR==1{print $1}'; }
+ci_green(){
+  local sha="$1" payload
+  payload="$(curl -fsS --max-time 15 "https://api.github.com/repos/texx013-boop/CHUMA-IP-FACTORY/actions/runs?head_sha=$sha&per_page=50" 2>/dev/null)" || return 1
+  python3 - "$sha" "$payload" <<'PY'
+import json,sys
+sha=sys.argv[1]
+data=json.loads(sys.argv[2])
+runs=[r for r in data.get("workflow_runs",[]) if r.get("head_sha")==sha]
+required={"CHUMA IP FACTORY CI","CHUMA Server Handoff"}
+for name in required:
+    matches=[r for r in runs if r.get("name")==name]
+    if not matches or not any(r.get("status")=="completed" and r.get("conclusion")=="success" for r in matches):
+        raise SystemExit(1)
+raise SystemExit(0)
+PY
+}
 healthy() {
   curl -fsS --max-time 5 http://127.0.0.1/health >/dev/null 2>&1 &&
   curl -fsS --max-time 5 http://127.0.0.1/ready >/dev/null 2>&1
@@ -166,6 +182,11 @@ while true; do
   if [[ "$SHA" == "$CURRENT_SHA" ]]; then sleep "$INTERVAL"; continue; fi
 
   log "new revision detected: $SHA"
+  if ! ci_green "$SHA"; then
+    log "update blocked: required GitHub validation is not green for $SHA"
+    sleep "$INTERVAL"
+    continue
+  fi
   if [[ ! -f "$ENV_FILE" ]]; then
     log "update blocked: deployment environment file is missing"
     sleep "$INTERVAL"
