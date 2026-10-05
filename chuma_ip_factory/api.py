@@ -59,6 +59,46 @@ class API(BaseHTTPRequestHandler):
         b=json.dumps(obj,ensure_ascii=False).encode(); self.send_response(status); self.send_header('Content-Type','application/json; charset=utf-8'); self.send_header('Cache-Control','no-store');
         for k,v in (extra or {}).items(): self.send_header(k,v)
         self.send_header('Content-Length',str(len(b))); self.end_headers(); self.wfile.write(b)
+    def send_control_html(self):
+        html = r"""<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CHUMA CONTROL</title>
+<style>
+:root{--bg:#06070b;--panel:#10131b;--panel2:#151a24;--line:#2a3040;--text:#f5f7fb;--muted:#8e98aa;--a:#8f5cff;--ok:#69e6a4;--bad:#ff647d;--warn:#f4c95d}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 80% 0,rgba(143,92,255,.18),transparent 32%),var(--bg);color:var(--text);font:14px/1.45 system-ui,-apple-system,Segoe UI,sans-serif}main{max-width:1250px;margin:auto;padding:22px}.top{display:flex;justify-content:space-between;gap:15px;align-items:center;margin-bottom:18px}.brand{font-size:22px;font-weight:850}.sub{color:var(--muted);font-size:12px}.pill{padding:8px 11px;border:1px solid var(--line);border-radius:999px;background:#0d1016}.grid{display:grid;grid-template-columns:1.2fr .8fr;gap:15px}.card{background:linear-gradient(145deg,#11151e,#0b0e14);border:1px solid var(--line);border-radius:17px;padding:18px;box-shadow:0 18px 50px #0006}.head{display:flex;justify-content:space-between;align-items:center;margin-bottom:13px}.head h2{margin:0;font-size:16px}.status{font-size:12px;color:var(--muted)}.good{color:var(--ok)}.bad{color:var(--bad)}button{border:1px solid var(--line);background:#171c26;color:#eef1f7;padding:10px 13px;border-radius:10px;cursor:pointer}button.primary{background:linear-gradient(135deg,#7040dc,#9d72ff);color:#090a0e;border:0;font-weight:800}button.danger{border-color:#63303b;color:#ff9aaa}.actions{display:flex;gap:8px;flex-wrap:wrap}.project{border:1px solid var(--line);border-radius:13px;padding:14px;margin:9px 0;background:#0c1017}.project-title{font-weight:800}.kv{display:grid;grid-template-columns:145px 1fr;gap:3px 10px;color:#b6becb;font-size:12px;margin:9px 0}.kv b{color:#fff;font-weight:600}.task{display:grid;gap:9px}textarea,input{width:100%;background:#090c12;color:#fff;border:1px solid #303746;border-radius:10px;padding:11px;font:inherit}textarea{min-height:105px;resize:vertical}.small{font-size:11px;color:var(--muted)}pre{white-space:pre-wrap;word-break:break-word;background:#090c11;border:1px solid var(--line);border-radius:10px;padding:12px;max-height:260px;overflow:auto}.toast{position:fixed;right:18px;bottom:18px;background:#171c25;border:1px solid var(--line);padding:12px 14px;border-radius:11px;display:none}.mobile{display:none}@media(max-width:800px){main{padding:13px}.grid{grid-template-columns:1fr}.top{align-items:flex-start}.mobile{display:inline}}
+</style></head><body><main>
+<div class="top"><div><div class="brand">CHUMA CONTROL</div><div class="sub">Внешний пульт · сервер · проекты · задачи</div></div><div class="pill" id="server">Подключение…</div></div>
+<div class="grid">
+<section class="card"><div class="head"><h2>Сервер</h2><button onclick="refresh()">Обновить</button></div><div id="serverBox" class="status">Проверка…</div><div class="actions" style="margin-top:12px"><button onclick="intent('verify','')">Проверить всё</button><button onclick="safeMode('on')">Safe Mode</button><button onclick="safeMode('off')">Снять Safe Mode</button><button class="danger" onclick="intent('restart-app','')">Перезапустить приложение</button></div></section>
+<section class="card"><div class="head"><h2>Команда</h2><span class="status">с телефона или ПК</span></div>
+<div class="task"><select id="project" onchange="renderSelected()" style="background:#090c12;color:#fff;border:1px solid #303746;border-radius:10px;padding:11px"><option value="SHUMA_SPACE">SHUMA.SPACE</option><option value="FILM_COMBAIN">Film Combain</option><option value="PERSONAL_AI_COMPANION">Personal AI Companion</option></select>
+<textarea id="task" placeholder="Например: Продолжить текущую работу и довести её до проверенного результата."></textarea>
+<div class="actions"><button class="primary" onclick="sendTask()">Поставить задачу</button><button onclick="resume()">Продолжить</button><button class="danger" onclick="stopProject()">Остановить</button></div><div class="small">Команда сохраняется на сервере и не зависит от телефона.</div></div></section>
+</div>
+<section class="card" style="margin-top:15px"><div class="head"><h2>Проекты</h2><span class="status">единое состояние</span></div><div id="projects">Загрузка…</div></section>
+<section class="card" style="margin-top:15px"><div class="head"><h2>История</h2><button onclick="historyLoad()">Обновить</button></div><pre id="history">Выбери проект.</pre></section>
+</main><div id="toast" class="toast"></div>
+<script>
+const $=id=>document.getElementById(id);let token=localStorage.getItem('chuma_token')||'';let data=[];
+function headers(){return {'Content-Type':'application/json','Authorization':'Bearer '+token}}
+async function api(path,opt={}){if(!token){token=prompt('Токен доступа CHUMA:')||'';localStorage.setItem('chuma_token',token)}let r=await fetch('/control/api'+path,Object.assign({headers:headers()},opt));let x=await r.json();if(r.status===401){localStorage.removeItem('chuma_token');token='';throw Error('Требуется токен доступа CHUMA')}if(!r.ok)throw Error(x.error||x.message||'Ошибка');return x}
+function toast(s){$('toast').textContent=s;$('toast').style.display='block';setTimeout(()=>$('toast').style.display='none',2600)}
+async function refresh(){try{let [s,p]=await Promise.all([api('/status'),api('/projects')]);data=p.projects||[];$('server').innerHTML='<span class="good">● ONLINE</span>';let h=s.health?.status||'—',r=s.ready?.status||'—';$('serverBox').innerHTML='<div class="kv"><span>Приложение</span><b>'+h+'</b><span>Готовность</span><b>'+r+'</b><span>Safe Mode</span><b>'+(s.safe_mode?'ON':'OFF')+'</b><span>Сервисы</span><b>'+Object.entries(s.services||{}).filter(x=>x[1]==='ok').length+'/'+Object.keys(s.services||{}).length+' OK</b></div><details><summary>Контейнеры</summary><pre>'+JSON.stringify(s.containers||[],null,2)+'</pre></details>';renderProjects();renderSelected()}catch(e){$('server').innerHTML='<span class="bad">● ERROR</span>';$('serverBox').textContent=e.message}}
+function renderProjects(){if(!data.length){$('projects').textContent='Нет данных';return}$('projects').innerHTML=data.map(x=>{let s=x.state||{};return '<div class="project"><div class="project-title">'+x.project_id+'</div><div class="kv"><span>Статус</span><b>'+esc(s.status||'—')+'</b><span>Задача</span><b>'+esc(s.current_task||'—')+'</b><span>Task</span><b>'+esc(s.task_status||'idle')+'</b><span>Последний результат</span><b>'+esc(s.last_verified_result||'—')+'</b><span>Следующее действие</span><b>'+esc(s.next_action||'—')+'</b><span>Сессия</span><b>'+esc(s.workspace_session||'—')+'</b></div><div class="actions"><button onclick="pick(\''+x.project_id+'\')">Выбрать</button><button onclick="doProject(\''+x.project_id+'\',\'resume\')">Продолжить</button><button class="danger" onclick="doProject(\''+x.project_id+'\',\'stop\')">Стоп</button></div></div>'}).join('')}
+function esc(s){return String(s).replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]))}
+function pick(p){$('project').value=p;historyLoad();window.scrollTo({top:0,behavior:'smooth'})}
+function renderSelected(){historyLoad().catch(()=>{})}
+async function historyLoad(){try{let p=$('project').value,x=await api('/history/'+encodeURIComponent(p));$('history').textContent=(x.history||[]).join('\n')||'История пуста'}catch(e){$('history').textContent=e.message}}
+async function intent(intent,task){try{let p=$('project').value,x=await api('/intent',{method:'POST',headers:headers(),body:JSON.stringify({project:p,intent,task,session:'web-control'})});toast(x.ok?'Готово':'Не выполнено');await refresh();await historyLoad()}catch(e){toast(e.message)}}
+async function sendTask(){let t=$('task').value.trim();if(!t)return toast('Опиши задачу');await intent('set-task',t);$('task').value=''}
+async function resume(){await intent('resume','')}
+async function stopProject(){await intent('stop','')}
+async function doProject(p,i){$('project').value=p;await intent(i,'')}
+async function safeMode(mode){try{let x=await api('/intent',{method:'POST',headers:headers(),body:JSON.stringify({project:'CONTROL',intent:'safe-mode-'+mode,session:'web-control'})});toast(x.ok?'Safe Mode: '+mode:x.error);await refresh()}catch(e){toast(e.message)}}
+refresh();setInterval(refresh,10000)
+</script></body></html>"""
+        b=html.encode('utf-8'); self.send_response(200); self.send_header('Content-Type','text/html; charset=utf-8'); self.send_header('Cache-Control','no-store, no-cache, must-revalidate, max-age=0'); self.send_header('Pragma','no-cache'); self.send_header('Expires','0'); self.send_header('Content-Length',str(len(b))); self.end_headers(); self.wfile.write(b)
+
     def send_html(self):
         html = r"""<!doctype html>
 <html lang="ru">
@@ -277,6 +317,8 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLower
 
     def do_GET(self):
         p = urllib.parse.urlsplit(self.path).path
+        if p == '/control':
+            return self.send_control_html()
         if p in ('/','/ui','/gallery'):
             return self.send_html()
         if p=='/health': return self.sendj(200,{'status':'ok','version':VERSION})
