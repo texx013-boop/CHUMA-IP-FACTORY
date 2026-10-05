@@ -36,6 +36,11 @@ jobs:
         run: |
           bash -n infra/bootstrap.sh
           for f in infra/*.sh; do bash -n "$f"; done
+          test -x infra/chuma-release.sh
+          grep -q "manifest checksum verification failed" infra/chuma-release.sh
+          grep -q "path traversal in bundle" infra/chuma-release.sh
+          grep -q "secret-like file in bundle" infra/chuma-release.sh
+          ! grep -q 'source "$tmp/manifest.env"' infra/chuma-release.sh
           sh -n infra/backup.sh
           mkdir -p /opt/chuma/agent
           for script in chuma-agent.sh auto-update.sh chuma-watchdog.sh chuma-security-agent.sh chuma-control.sh; do
@@ -53,8 +58,11 @@ jobs:
           test -f infra/chuma-control.sh
           test -f infra/chuma-control.service
           test -f infra/chuma-control.timer
+          test -f infra/chuma-release.sh
           grep -q 'CHUMA Control' infra/chuma-control.sh
           grep -q 'health) health' infra/chuma-control.sh
+          grep -q 'release) release' infra/chuma-control.sh
+          grep -q 'chuma-release.sh' infra/agent-install.sh
           grep -q 'app.health=ok' infra/chuma-control.sh
           grep -q 'systemctl enable --now chuma-backup.timer chuma-control.timer' infra/agent-install.sh
           grep -q 'sha256sum "\$FILE" > "\$FILE.sha256"' infra/backup.sh
