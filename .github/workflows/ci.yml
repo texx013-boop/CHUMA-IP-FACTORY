@@ -57,6 +57,9 @@ jobs:
           done
           grep -q "git@github.com:texx013-boop/CHUMA-IP-FACTORY.git" infra/auto-update.sh
           grep -q 'git -C "\$TMP/repo" archive "\$SHA"' infra/auto-update.sh
+          grep -q 'agent refresh failed; deployment is not accepted' infra/auto-update.sh
+          grep -q 'previous release restored and healthy' infra/auto-update.sh
+          grep -q 'agent-install.sh' infra/auto-update.sh
           test ! -f infra/.env
           test ! -f infra/backups/.env
           docker run --rm -e ACME_EMAIL=ci@example.com -e CHUMA_DOMAIN=ci.example.com -v "$PWD/infra/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
