@@ -92,7 +92,7 @@ jobs:
           grep -q 'agent-install.sh' infra/auto-update.sh
           test ! -f infra/.env
           test ! -f infra/backups/.env
-          sed 's/{$CHUMA_DOMAIN}/ci.example.com/; s/{$CHUMA_UPSTREAM}/127.0.0.1:8097/' infra/Caddyfile | docker run --rm -i --entrypoint /usr/bin/caddy caddy:2-alpine adapt --config /dev/stdin --adapter caddyfile --pretty >/tmp/chuma-caddy.json 2>/tmp/chuma-caddy.err || { cat /tmp/chuma-caddy.err; cat /tmp/chuma-caddy.json; exit 1; }
+          sed 's/{$CHUMA_DOMAIN}/ci.example.com/; s/{$CHUMA_UPSTREAM}/127.0.0.1:8097/' infra/Caddyfile | docker run --rm -i --entrypoint /bin/sh caddy:2-alpine -c 'cat >/tmp/Caddyfile && caddy adapt --config /tmp/Caddyfile --adapter caddyfile --pretty' >/tmp/chuma-caddy.json 2>/tmp/chuma-caddy.err || { cat /tmp/chuma-caddy.err; cat /tmp/chuma-caddy.json; exit 1; }
 
       - name: Docker build security check
         run: |
