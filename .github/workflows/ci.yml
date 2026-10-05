@@ -60,6 +60,7 @@ jobs:
           test -f infra/chuma-workspace.sh
           bash infra/test-chuma-workspace.sh
           bash infra/test-chuma-interaction-core.sh
+          bash infra/test-chuma-goal-decision-recovery-core.sh
           test -f infra/chuma-control.service
           test -f infra/chuma-control.timer
           test -f infra/chuma-release.sh
