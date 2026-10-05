@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-
 APP_ROOT="${APP_ROOT:-/opt/chuma}"
 CONTROL_ROOT="${CHUMA_CONTROL_ROOT:-$APP_ROOT/control}"
 STATE_DIR="$CONTROL_ROOT/state"
@@ -14,8 +13,7 @@ REGISTRY_FILE="${CHUMA_PROJECT_REGISTRY:-$PROJECTS_DIR/registry.env}"
 
 mkdir -p "$STATE_DIR" "$PROJECTS_DIR" "$INCOMING_DIR" "$RELEASES_DIR" "$WORKSPACE_STATE_DIR" "$WORKSPACE_LOCK_DIR"
 chmod 700 "$CONTROL_ROOT" "$STATE_DIR" "$PROJECTS_DIR" "$INCOMING_DIR" "$RELEASES_DIR" "$WORKSPACE_STATE_DIR" "$WORKSPACE_LOCK_DIR"
-touch "$LOG_FILE"
-chmod 600 "$LOG_FILE"
+touch "$LOG_FILE"; chmod 600 "$LOG_FILE"
 
 log() { printf '%s %s\n' "$(date -Is)" "$*" | tee -a "$LOG_FILE"; }
 
@@ -52,18 +50,13 @@ intelligence() {
   "$APP_ROOT/agent/chuma-intelligence.sh" "$@"
 }
 
-intelligence() {
-  [[ $# -ge 2 ]] || { printf 'Usage: chuma-control.sh intelligence <command> <project> ...\n' >&2; return 64; }
-  "$APP_ROOT/agent/chuma-intelligence.sh" "$@"
-}
-
 workspace() {
-  [[ $# -ge 2 ]] || { printf 'Usage: chuma-control.sh workspace {status|resume|stop} <project>\n' >&2; return 64; }
+  [[ $# -ge 2 ]] || { printf 'Usage: chuma-control.sh workspace <command> <project> ...\n' >&2; return 64; }
   "$APP_ROOT/agent/chuma-workspace.sh" "$@"
 }
 
 release() {
-  [[ $# -eq 2 ]] || { printf "Usage: chuma-control.sh release {verify|stage|promote} <bundle>\n" >&2; return 64; }
+  [[ $# -eq 2 ]] || { printf 'Usage: chuma-control.sh release {verify|stage|promote} <bundle>\n' >&2; return 64; }
   "$APP_ROOT/agent/chuma-release.sh" "$1" "$2"
 }
 
@@ -72,19 +65,14 @@ health() {
   init_registry
   for project in SHUMA_SPACE FILM_COMBAIN PERSONAL_AI_COMPANION; do
     if ! grep -q "^${project}=enabled$" "$REGISTRY_FILE"; then
-      printf 'project.%s=disabled\\n' "$project"
-      failed=1
+      printf 'project.%s=disabled\n' "$project"; failed=1
     else
-      printf 'project.%s=enabled\\n' "$project"
+      printf 'project.%s=enabled\n' "$project"
     fi
   done
   for unit in chuma-agent.service chuma-auto-update.service chuma-watchdog.service chuma-security-agent.service; do
-    if ! systemctl is-active --quiet "$unit"; then
-      printf 'service.%s=down\n' "$unit"
-      failed=1
-    else
-      printf 'service.%s=ok\n' "$unit"
-    fi
+    if ! systemctl is-active --quiet "$unit"; then printf 'service.%s=down\n' "$unit"; failed=1
+    else printf 'service.%s=ok\n' "$unit"; fi
   done
   if systemctl is-active --quiet chuma-backup.timer; then printf 'backup.timer=ok\n'; else printf 'backup.timer=down\n'; failed=1; fi
   if systemctl is-active --quiet chuma-control.timer; then printf 'control.timer=ok\n'; else printf 'control.timer=down\n'; failed=1; fi
