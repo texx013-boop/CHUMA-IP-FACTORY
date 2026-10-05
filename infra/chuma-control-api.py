@@ -110,19 +110,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         path=self.path.split("?",1)[0]
         if path=="/api/pair":
-            code=self.headers.get("X-CHUMA-Pairing-Code","").strip()
-            if not auth_pair(code):
-                return self.sendj(401,{"error":"invalid_pairing"})
-            session=issue_session()
-            PAIRING_FILE.unlink(missing_ok=True)
-            PAIRING_META_FILE.unlink(missing_ok=True)
-            self.send_response(200)
-            self.send_header("Content-Type","application/json; charset=utf-8")
-            self.send_header("Cache-Control","no-store")
-            self.send_header("Set-Cookie",f"chuma_session={session}; Path=/control; Max-Age={SESSION_TTL}; HttpOnly; SameSite=Strict; Secure")
-            self.end_headers()
-            self.wfile.write(b'{"ok":true}')
-            return
+            return self.sendj(405,{"error":"pair_requires_post"})
         if path=="/api/auth/status":
             return self.sendj(200,{"authenticated":self.auth()})
         if path=="/api/auth/logout":
@@ -207,8 +195,22 @@ class Handler(BaseHTTPRequestHandler):
             return self.sendj(200,{"project_id":p,"ok":rc==0,"history":out.splitlines()[-100:]})
         return self.sendj(404,{"error":"not_found"})
     def do_POST(self):
-        if not self.auth(): return self.sendj(401,{"error":"unauthorized"})
         path=self.path.split("?",1)[0]
+        if path=="/api/pair":
+            code=self.headers.get("X-CHUMA-Pairing-Code","").strip()
+            if not auth_pair(code):
+                return self.sendj(401,{"error":"invalid_pairing"})
+            session=issue_session()
+            PAIRING_FILE.unlink(missing_ok=True)
+            PAIRING_META_FILE.unlink(missing_ok=True)
+            self.send_response(200)
+            self.send_header("Content-Type","application/json; charset=utf-8")
+            self.send_header("Cache-Control","no-store")
+            self.send_header("Set-Cookie",f"chuma_session={session}; Path=/control; Max-Age={SESSION_TTL}; HttpOnly; SameSite=Strict; Secure")
+            self.end_headers()
+            self.wfile.write(b'{"ok":true}')
+            return
+        if not self.auth(): return self.sendj(401,{"error":"unauthorized"})
         try: data=self.body()
         except Exception: return self.sendj(400,{"error":"invalid_json"})
         m=re.fullmatch(r"/api/jobs/(JOB-[0-9]{8})/(approve|deny)",path)
