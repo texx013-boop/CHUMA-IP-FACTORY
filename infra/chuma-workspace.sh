@@ -188,20 +188,25 @@ open_workspace() {
 }
 
 set_task() {
-  local project="$1" task="$2" file
+  local project="$1" task="$2" file tmp
   ensure_state "$project"
-  [[ -n "$task" && "$task" != *
-  local project="$1" file
-  ensure_state "$project"
+  [[ -n "$task" && "$task" != *$'\n'* && "$task" != *$'\r'* && ${#task} -le 2000 ]] || { echo "invalid task" >&2; return 64; }
   file="$(state_file "$project")"
-  expire_lock_if_needed "$project"
-  if [[ -d "$(lock_dir "$project")" ]]; then rm -rf -- "$(lock_dir "$project")"; fi
-  sed -i 's/^workspace_lock=.*/workspace_lock=none/; s/^workspace_session=.*/workspace_session=/; s/^workspace_lease_expires=.*/workspace_lease_expires=/; s/^task_status=.*/task_status=stopped/; s/^updated_at=.*/updated_at='"$(date -Is)"'/' "$file"
-  record "$project" stop "ok"
-  printf 'workspace.stop=ok
-'
+  tmp="$file.tmp.$$"
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    case "$line" in
+      current_task=*) printf 'current_task=%s\n' "$task" ;;
+      task_status=*) printf 'task_status=queued\n' ;;
+      next_action=*) printf 'next_action=execute_task\n' ;;
+      updated_at=*) printf 'updated_at=%s\n' "$(date -Is)" ;;
+      *) printf '%s\n' "$line" ;;
+    esac
+  done < "$file" > "$tmp"
+  chmod 600 "$tmp"
+  mv -f -- "$tmp" "$file"
+  record "$project" task_queued "ok"
+  printf 'workspace.task=queued\nproject=%s\n' "$project"
 }
-
 history() {
   local project="$1" file
   ensure_state "$project"
