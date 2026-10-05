@@ -67,6 +67,14 @@ jobs:
           test -f infra/chuma-job-dispatcher.sh
           test -f infra/chuma-job-dispatcher.service
           bash -n infra/chuma-job-dispatcher.sh
+          test -f infra/chuma-operation-registry.sh
+          bash -n infra/chuma-operation-registry.sh
+          bash infra/test-chuma-operation-layer.sh
+          grep -q 'operation_not_allowed' infra/executors/SHUMA_SPACE.sh
+          grep -q 'operation_not_allowed' infra/executors/FILM_COMBAIN.sh
+          grep -q 'operation_not_allowed' infra/executors/PERSONAL_AI_COMPANION.sh
+          ! grep -R -nE '(^|[[:space:]])(eval|sh[[:space:]]+-c|bash[[:space:]]+-c)[[:space:]]+["\$].*(task|TASK)' infra/executors infra/chuma-job-dispatcher.sh
+          grep -q '/api/operations' infra/chuma-control-api.py
           grep -q "retry()" infra/chuma-job-queue.sh
           grep -q "max_attempts=2" infra/chuma-job-queue.sh
           grep -q "job_retrying" infra/chuma-job-dispatcher.sh
