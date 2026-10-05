@@ -93,7 +93,7 @@ jobs:
           test ! -f infra/.env
           test ! -f infra/backups/.env
           sed 's/{$CHUMA_DOMAIN}/ci.example.com/; s/{$CHUMA_UPSTREAM}/127.0.0.1:8097/' infra/Caddyfile >/tmp/chuma-ci.Caddyfile
-          docker run --rm --entrypoint /usr/bin/caddy -v /tmp/chuma-ci.Caddyfile:/etc/caddy/Caddyfile:ro caddy:2-alpine adapt --config /etc/caddy/Caddyfile --adapter caddyfile --pretty >/tmp/chuma-caddy.json
+          docker run --rm --entrypoint /usr/bin/caddy -v /tmp/chuma-ci.Caddyfile:/etc/caddy/Caddyfile:ro caddy:2-alpine adapt --config /etc/caddy/Caddyfile --adapter caddyfile --pretty >/tmp/chuma-caddy.json 2>/tmp/chuma-caddy.err || { cat /tmp/chuma-caddy.err; cat /tmp/chuma-caddy.json; exit 1; }
 
       - name: Docker build security check
         run: |
