@@ -16,7 +16,12 @@ class API(BaseHTTPRequestHandler):
     auth_failure_limit=10
 
     def authorized(self):
+        # Authentication is fail-closed by default. Anonymous API access is
+        # allowed only when explicitly enabled for local/test environments.
         if not self.admin_token:
+            allow_anonymous=os.getenv("CHUMA_ALLOW_ANONYMOUS_AUTH", "").strip().lower() in ("1","true","yes","on")
+            if not allow_anonymous:
+                return False
             return True
         value=self.headers.get("Authorization", "")
         token=value[7:].strip() if value.startswith("Bearer ") else ""
@@ -297,7 +302,9 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLower
                 return self.sendj(409,{'error':'artifact_integrity_failed'})
             self.send_response(200); self.send_header('Content-Type',row['mime_type']); self.send_header('Cache-Control','no-store'); self.send_header('Content-Length',str(len(data))); self.end_headers(); self.wfile.write(data); return
         if not self.require_auth(): return
-        if p=='/config': return self.sendj(200,{'auth_required':bool(self.admin_token),'version':VERSION})
+        if p=='/config':
+            anonymous=os.getenv("CHUMA_ALLOW_ANONYMOUS_AUTH", "").strip().lower() in ("1","true","yes","on")
+            return self.sendj(200,{'auth_required':bool(self.admin_token) or not anonymous,'version':VERSION})
         if p=='/budget': return self.sendj(200,self.budget_policy.describe())
         if p=='/video/status': return self.sendj(200,self.video_combain.status())
         if p.startswith('/video/jobs'):
