@@ -129,7 +129,7 @@ while true; do
     log "deployment successful: $SHA"
   else
     log "deployment failed; restoring previous release"
-    compose "$RELEASE_DIR/infra/compose.yml" "$RELEASE_DIR/infra/compose.yml" down >/dev/null 2>&1 || true
+    compose "$RELEASE_DIR/infra/.env" "$RELEASE_DIR/infra/compose.yml" down >/dev/null 2>&1 || true
     rm -rf "$RELEASE_DIR"
     if [[ -d "$PREVIOUS_DIR" ]]; then
       mv "$PREVIOUS_DIR" "$RELEASE_DIR"
