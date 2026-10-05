@@ -92,7 +92,7 @@ jobs:
           grep -q 'agent-install.sh' infra/auto-update.sh
           test ! -f infra/.env
           test ! -f infra/backups/.env
-          docker run --rm -e ACME_EMAIL=ci@example.com -e CHUMA_DOMAIN=http://ci.example.com -v "$PWD/infra/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+          docker run --rm -e ACME_EMAIL=ci@example.com -e CHUMA_DOMAIN=http://ci.example.com -v "$PWD/infra/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2-alpine validate --config /etc/caddy/Caddyfile --adapter caddyfile
 
       - name: Docker build security check
         run: |
