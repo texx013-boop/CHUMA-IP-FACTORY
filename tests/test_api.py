@@ -119,6 +119,33 @@ def test_http_health_and_auth_contract():
 
 
 
+def test_auth_fails_closed_when_admin_token_is_missing():
+    d = tempfile.TemporaryDirectory()
+    factory = CHUMA(Path(d.name) / "db.sqlite", Path(d.name) / "media")
+    previous_factory, previous_token, previous_flag = API.factory, API.admin_token, __import__("os").environ.get("CHUMA_ALLOW_ANONYMOUS_AUTH")
+    API.factory, API.admin_token = factory, ""
+    __import__("os").environ.pop("CHUMA_ALLOW_ANONYMOUS_AUTH", None)
+    server = HTTPServer(("127.0.0.1", 0), API)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        req = urllib.request.Request(f"http://127.0.0.1:{server.server_port}/provider")
+        try:
+            urllib.request.urlopen(req, timeout=5)
+            assert False, "API accepted unauthenticated access with no admin token"
+        except urllib.error.HTTPError as exc:
+            assert exc.code == 401
+    finally:
+        server.shutdown()
+        server.server_close()
+        API.factory, API.admin_token = previous_factory, previous_token
+        if previous_flag is None:
+            __import__("os").environ.pop("CHUMA_ALLOW_ANONYMOUS_AUTH", None)
+        else:
+            __import__("os").environ["CHUMA_ALLOW_ANONYMOUS_AUTH"] = previous_flag
+        factory.store.close()
+        d.cleanup()
+
+
 def test_owner_listing_is_scoped_to_request_owner():
     d = tempfile.TemporaryDirectory()
     factory = CHUMA(Path(d.name) / "db.sqlite", Path(d.name) / "media")
