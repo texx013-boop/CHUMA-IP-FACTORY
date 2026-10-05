@@ -15,6 +15,8 @@ SAFE_PROJECT=re.compile(r"^[A-Za-z0-9._-]+$")
 PAIRING_FILE=CONTROL_ROOT/"state/control-pairing-code"
 SESSION_FILE=CONTROL_ROOT/"state/control-session"
 SESSION_TTL=30*24*3600
+PAIRING_TTL=10*60
+PAIRING_META_FILE=CONTROL_ROOT/"state/control-pairing-meta"
 
 def load_token():
     try:
@@ -46,6 +48,8 @@ def auth_session(value):
 
 def auth_pair(code):
     try:
+        expiry=int(PAIRING_META_FILE.read_text().strip())
+        if expiry <= int(time.time()): return False
         expected=PAIRING_FILE.read_text().strip()
         return bool(expected) and secrets.compare_digest(code,expected)
     except Exception:
@@ -55,7 +59,8 @@ def generate_pairing():
     code=secrets.token_urlsafe(18)
     PAIRING_FILE.parent.mkdir(parents=True,exist_ok=True)
     PAIRING_FILE.write_text(code)
-    os.chmod(PAIRING_FILE,0o600)
+    PAIRING_META_FILE.write_text(str(int(time.time())+PAIRING_TTL))
+    os.chmod(PAIRING_FILE,0o600); os.chmod(PAIRING_META_FILE,0o600)
     return code
 
 def run(*args, timeout=30):
@@ -107,10 +112,11 @@ class Handler(BaseHTTPRequestHandler):
                 return self.sendj(401,{"error":"invalid_pairing"})
             session=issue_session()
             PAIRING_FILE.unlink(missing_ok=True)
+            PAIRING_META_FILE.unlink(missing_ok=True)
             self.send_response(200)
             self.send_header("Content-Type","application/json; charset=utf-8")
             self.send_header("Cache-Control","no-store")
-            self.send_header("Set-Cookie",f"chuma_session={session}; Path=/control; Max-Age={SESSION_TTL}; HttpOnly; SameSite=Strict")
+            self.send_header("Set-Cookie",f"chuma_session={session}; Path=/control; Max-Age={SESSION_TTL}; HttpOnly; SameSite=Strict; Secure")
             self.end_headers()
             self.wfile.write(b'{"ok":true}')
             return
@@ -119,7 +125,7 @@ class Handler(BaseHTTPRequestHandler):
         if path=="/api/auth/logout":
             SESSION_FILE.unlink(missing_ok=True)
             self.send_response(200)
-            self.send_header("Set-Cookie","chuma_session=; Path=/control; Max-Age=0; HttpOnly; SameSite=Strict")
+            self.send_header("Set-Cookie","chuma_session=; Path=/control; Max-Age=0; HttpOnly; SameSite=Strict; Secure")
             self.end_headers()
             return
         if not self.auth(): return self.sendj(401,{"error":"unauthorized"})
