@@ -4,6 +4,8 @@ set -Eeuo pipefail
 APP_ROOT="${APP_ROOT:-/opt/chuma}"
 CONTROL_ROOT="${CHUMA_CONTROL_ROOT:-$APP_ROOT/control}"
 INTEL_ROOT="$CONTROL_ROOT/state/intelligence"
+SAFE_MODE_FILE="$CONTROL_ROOT/state/SAFE_MODE"
+AUTONOMY_FILE="$CONTROL_ROOT/state/AUTONOMY_MODE"
 GOAL_ROOT="$INTEL_ROOT/goals"
 DECISION_ROOT="$INTEL_ROOT/decisions"
 EVENT_ROOT="$INTEL_ROOT/events"
@@ -17,6 +19,20 @@ valid_id(){ [[ "$1" =~ ^[A-Za-z0-9._:-]{8,128}$ ]]; }
 safe_value(){ [[ "$1" != *
 file_for(){ local root="$1" project="$2"; valid_project "$project" || { echo "invalid project id" >&2; return 64; }; printf '%s/%s.state' "$root" "$project"; }
 now(){ date -Is; }
+
+
+autonomy_status(){
+  if [[ -f "$AUTONOMY_FILE" ]]; then cat "$AUTONOMY_FILE"; else printf 'autonomy_mode=L3\npolicy=MAX_AUTONOMOUS_FINISH\n'; fi
+}
+autonomy_set(){
+  local level="$1"
+  [[ "$level" =~ ^L[0-4]$ ]] || { echo "invalid autonomy level" >&2; return 64; }
+  [[ "$level" != "L4" ]] || { echo "L4 reserved" >&2; return 78; }
+  umask 077
+  printf 'autonomy_mode=%s\npolicy=MAX_AUTONOMOUS_FINISH\nupdated_at=%s\n' "$level" "$(now)" > "$AUTONOMY_FILE"
+  chmod 600 "$AUTONOMY_FILE"
+  printf 'autonomy.set=ok\n'; cat "$AUTONOMY_FILE"
+}
 
 goal_status(){
   local p="$1" f; f="$(file_for "$GOAL_ROOT" "$p")"
@@ -108,6 +124,8 @@ recovery_status(){
 context(){
   local p="$1"; valid_project "$p" || return 64
   printf 'CHUMA CONTEXT\nproject_id=%s\n' "$p"
+  autonomy_status
+  if [[ -f "$SAFE_MODE_FILE" ]]; then printf 'safe_mode=on\n'; else printf 'safe_mode=off\n'; fi
   goal_status "$p"
   recovery_status "$p"
   printf '--- decisions ---\n'; decision_list "$p"
@@ -138,10 +156,16 @@ CHUMA INTELLIGENCE
   checkpoint <project> <stage> <verified_result>
   recovery status <project>
   context <project>
-  watch <project>
+  autonomy status\n  autonomy set <L0|L1|L2|L3>\n  watch <project>
 EOF
 }
 case "${1:-}" in
+ autonomy)
+   case "${2:-}" in
+     status) [[ $# -eq 2 ]] || { usage >&2; exit 64; }; autonomy_status ;;
+     set) [[ $# -eq 3 ]] || { usage >&2; exit 64; }; autonomy_set "$3" ;;
+     *) usage >&2; exit 64;;
+   esac ;;
  goal)
    case "${2:-}" in
      set) [[ $# -ge 5 && $# -le 6 ]] || { usage >&2; exit 64; }; goal_set "$3" "$4" "$5" "${6:-medium}" ;;
