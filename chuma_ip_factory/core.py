@@ -222,9 +222,11 @@ class CHUMA:
         if not data or len(data) > 10*1024*1024: raise ValueError('reference_image_too_large')
         if mime_type not in ('image/jpeg','image/png','image/webp'): raise ValueError('reference_must_be_jpeg_png_or_webp')
         ext={'image/jpeg':'jpg','image/png':'png','image/webp':'webp'}[mime_type]
-        aid=uid('ASSET'); digest=hashlib.sha256(data).hexdigest(); path=(self.asset_root/f'{aid}.{ext}').resolve(); root=self.asset_root.resolve();
+        aid=uid('ASSET'); digest=hashlib.sha256(data).hexdigest(); root=self.asset_root.resolve(); path=(root/f'{aid}.{ext}').resolve()
         if root not in path.parents: raise CHUMAError('asset_path_forbidden')
-        tmp=path.with_name(path.name+'.tmp'); tmp.write_bytes(data); tmp.replace(path);
+        tmp=path.with_name(path.name+'.tmp'); tmp.write_bytes(data)
+        if tmp.parent != root: raise CHUMAError('asset_path_forbidden')
+        tmp.replace(path)
         t=now(); meta={'role':'character_reference','filename':filename,'mime_type':mime_type,'size_bytes':len(data)}
         self.store.db.execute('INSERT INTO assets VALUES(?,?,?,?,?,?,?,?)',(aid,owner,cid,'REFERENCE','APPROVED',json.dumps(meta,ensure_ascii=False),digest,t))
         arid=uid('ART')
@@ -241,9 +243,11 @@ class CHUMA:
         if not data or len(data)>25*1024*1024: raise ValueError('voice_file_too_large')
         if not mime_type.startswith('audio/'): raise ValueError('voice_must_be_audio')
         ext=(filename.rsplit('.',1)[-1] if '.' in filename else 'bin')[:8]
-        aid=uid('ASSET'); digest=hashlib.sha256(data).hexdigest(); path=(self.asset_root/(aid+'.'+ext)).resolve(); root=self.asset_root.resolve();
+        aid=uid('ASSET'); digest=hashlib.sha256(data).hexdigest(); root=self.asset_root.resolve(); path=(root/(aid+'.'+ext)).resolve()
         if root not in path.parents: raise CHUMAError('asset_path_forbidden')
-        tmp=path.with_name(path.name+'.tmp'); tmp.write_bytes(data); tmp.replace(path); t=now()
+        tmp=path.with_name(path.name+'.tmp'); tmp.write_bytes(data)
+        if tmp.parent != root: raise CHUMAError('asset_path_forbidden')
+        tmp.replace(path); t=now()
         meta={'role':'character_voice','filename':filename,'mime_type':mime_type,'size_bytes':len(data)}
         self.store.db.execute('INSERT INTO assets VALUES(?,?,?,?,?,?,?,?)',(aid,owner,cid,'VOICE','APPROVED',json.dumps(meta,ensure_ascii=False),digest,t))
         arid=uid('ART'); self.store.db.execute('INSERT INTO artifacts VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',(arid,owner,cid,None,aid,'voice',mime_type,str(path),digest,'user-upload','READY',t))
