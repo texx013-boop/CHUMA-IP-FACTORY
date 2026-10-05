@@ -8,3 +8,6 @@ grep -q "PAIRING_TTL=10\*60" "$ROOT/infra/chuma-control-api.py"
 grep -q "Secure" "$ROOT/infra/chuma-control-api.py"
 grep -q "PAIRING_META_FILE" "$ROOT/infra/chuma-control-api.py"
 echo "CHUMA control API syntax: OK"
+
+grep -q "retry" "$ROOT/infra/chuma-control-api.py"
+grep -q "owner_stop" "$ROOT/infra/chuma-control-api.py"
