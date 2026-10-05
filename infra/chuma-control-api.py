@@ -1,0 +1,129 @@
+#!/usr/bin/env python3
+import json, os, re, socket, subprocess, time
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from pathlib import Path
+from socketserver import UnixStreamServer
+
+APP_ROOT=Path(os.getenv("APP_ROOT","/opt/chuma"))
+CONTROL_ROOT=Path(os.getenv("CHUMA_CONTROL_ROOT",str(APP_ROOT/"control")))
+SOCKET_PATH=Path(os.getenv("CHUMA_CONTROL_SOCKET",str(CONTROL_ROOT/"control.sock")))
+ENV_FILE=Path(os.getenv("CHUMA_ENV_FILE",str(APP_ROOT/"infra/.env")))
+PROJECTS=("SHUMA_SPACE","FILM_COMBAIN","PERSONAL_AI_COMPANION")
+ALLOWED_INTENTS={"status","resume","stop","set-task","safe-mode-on","safe-mode-off","verify","restart-app"}
+SAFE_TASK=re.compile(r"^[^\r\n]{1,2000}$")
+SAFE_PROJECT=re.compile(r"^[A-Za-z0-9._-]+$")
+
+def load_token():
+    try:
+        for line in ENV_FILE.read_text().splitlines():
+            if line.startswith("CHUMA_ADMIN_TOKEN="):
+                return line.split("=",1)[1].strip().strip('"').strip("'")
+    except Exception:
+        pass
+    return os.getenv("CHUMA_ADMIN_TOKEN","").strip()
+
+def run(*args, timeout=30):
+    p=subprocess.run(args,capture_output=True,text=True,timeout=timeout)
+    return p.returncode,p.stdout.strip(),p.stderr.strip()
+
+def workspace(cmd, project, *extra):
+    return run(str(APP_ROOT/"agent/chuma-workspace.sh"),cmd,project,*extra)
+
+def parse_kv(s):
+    out={}
+    for line in s.splitlines():
+        if "=" in line:
+            k,v=line.split("=",1); out[k]=v
+    return out
+
+class Handler(BaseHTTPRequestHandler):
+    server_version="CHUMA-Control-Agent/1.0"
+    def log_message(self,*args): pass
+    def auth(self):
+        token=load_token()
+        value=self.headers.get("Authorization","")
+        supplied=value[7:].strip() if value.startswith("Bearer ") else ""
+        return bool(token) and bool(supplied) and supplied==token
+    def sendj(self,status,obj):
+        b=json.dumps(obj,ensure_ascii=False).encode()
+        self.send_response(status); self.send_header("Content-Type","application/json; charset=utf-8")
+        self.send_header("Cache-Control","no-store"); self.send_header("Content-Length",str(len(b))); self.end_headers(); self.wfile.write(b)
+    def body(self):
+        n=min(int(self.headers.get("Content-Length","0") or 0),32768)
+        return json.loads(self.rfile.read(n) or b"{}")
+    def do_GET(self):
+        if not self.auth(): return self.sendj(401,{"error":"unauthorized"})
+        path=self.path.split("?",1)[0]
+        if path=="/api/status":
+            services={}
+            for unit in ("chuma-agent.service","chuma-auto-update.service","chuma-watchdog.service","chuma-security-agent.service","chuma-control.service"):
+                rc,_,_=run("systemctl","is-active",unit)
+                services[unit]="ok" if rc==0 else "down"
+            rc,_,_=run("docker","ps","--format","{{.Names}}|{{.Status}}")
+            containers=[x for x in _.splitlines()] if False else []
+            # docker output is stdout, not stderr
+            rc,out,err=run("docker","ps","--format","{{.Names}}|{{.Status}}")
+            containers=[dict(zip(("name","status"),x.split("|",1))) for x in out.splitlines() if "|" in x]
+            rc,hout,_=run("curl","-fsS","--max-time","5","http://127.0.0.1/health")
+            rc2,rout,_=run("curl","-fsS","--max-time","5","http://127.0.0.1/ready")
+            return self.sendj(200,{"status":"ok" if rc==0 and rc2==0 else "degraded","services":services,"containers":containers,
+                                  "health":json.loads(hout) if hout else None,"ready":json.loads(rout) if rout else None,
+                                  "safe_mode":(CONTROL_ROOT/"state/SAFE_MODE").exists(),"timestamp":time.time()})
+        if path=="/api/projects":
+            projects=[]
+            for p in PROJECTS:
+                rc,out,err=workspace("status",p)
+                projects.append({"project_id":p,"state":parse_kv(out),"ok":rc==0})
+            return self.sendj(200,{"projects":projects})
+        m=re.fullmatch(r"/api/workspace/([A-Za-z0-9._-]+)",path)
+        if m:
+            p=m.group(1); rc,out,err=workspace("status",p)
+            return self.sendj(200,{"project_id":p,"ok":rc==0,"state":parse_kv(out),"raw":out})
+        m=re.fullmatch(r"/api/history/([A-Za-z0-9._-]+)",path)
+        if m:
+            p=m.group(1); rc,out,err=workspace("history",p)
+            return self.sendj(200,{"project_id":p,"ok":rc==0,"history":out.splitlines()[-100:]})
+        return self.sendj(404,{"error":"not_found"})
+    def do_POST(self):
+        if not self.auth(): return self.sendj(401,{"error":"unauthorized"})
+        path=self.path.split("?",1)[0]
+        try: data=self.body()
+        except Exception: return self.sendj(400,{"error":"invalid_json"})
+        if path!="/api/intent": return self.sendj(404,{"error":"not_found"})
+        project=str(data.get("project","")).strip()
+        intent=str(data.get("intent","")).strip()
+        task=str(data.get("task","")).strip()
+        session=str(data.get("session","mobile-control")).strip() or "mobile-control"
+        if not SAFE_PROJECT.fullmatch(project) or not intent: return self.sendj(400,{"error":"invalid_request"})
+        if intent not in ALLOWED_INTENTS: return self.sendj(403,{"error":"intent_not_allowed"})
+        if intent=="resume":
+            rc,out,err=workspace("resume",project)
+        elif intent=="stop":
+            rc,out,err=workspace("stop",project)
+        elif intent=="set-task":
+            if not SAFE_TASK.fullmatch(task): return self.sendj(400,{"error":"invalid_task"})
+            rc,out,err=workspace("set-task",project,task)
+        elif intent=="safe-mode-on":
+            rc,out,err=workspace("safe-mode","dummy","on")
+        elif intent=="safe-mode-off":
+            rc,out,err=workspace("safe-mode","dummy","off")
+        elif intent=="verify":
+            rc,out,err=run(str(APP_ROOT/"agent/chuma-control.sh"),"health",timeout=30)
+        elif intent=="restart-app":
+            rc,out,err=run("systemctl","restart","chuma-agent.service",timeout=30)
+        else:
+            rc,out,err=0,"status",""
+        return self.sendj(200 if rc==0 else 409,{"ok":rc==0,"intent":intent,"project":project,"output":out,"error":err})
+    
+class Server(UnixStreamServer):
+    allow_reuse_address=True
+
+def main():
+    CONTROL_ROOT.mkdir(parents=True,exist_ok=True)
+    try: SOCKET_PATH.unlink()
+    except FileNotFoundError: pass
+    srv=Server(str(SOCKET_PATH),Handler)
+    os.chmod(SOCKET_PATH,0o666)
+    srv.serve_forever()
+
+if __name__=="__main__": main()
