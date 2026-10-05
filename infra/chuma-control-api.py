@@ -9,7 +9,7 @@ CONTROL_ROOT=Path(os.getenv("CHUMA_CONTROL_ROOT",str(APP_ROOT/"control")))
 SOCKET_PATH=Path(os.getenv("CHUMA_CONTROL_SOCKET",str(CONTROL_ROOT/"control.sock")))
 ENV_FILE=Path(os.getenv("CHUMA_ENV_FILE",str(APP_ROOT/"infra/.env")))
 PROJECTS=("SHUMA_SPACE","FILM_COMBAIN","PERSONAL_AI_COMPANION")
-ALLOWED_INTENTS={"status","resume","stop","set-task","safe-mode-on","safe-mode-off","verify","restart-app"}
+ALLOWED_INTENTS={"status","resume","stop","set-task","create-job","safe-mode-on","safe-mode-off","verify","restart-app"}
 SAFE_TASK=re.compile(r"^[^\r\n]{1,2000}$")
 SAFE_PROJECT=re.compile(r"^[A-Za-z0-9._-]+$")
 PAIRING_FILE=CONTROL_ROOT/"state/control-pairing-code"
@@ -64,6 +64,15 @@ def run(*args, timeout=30):
 
 def workspace(cmd, project, *extra):
     return run(str(APP_ROOT/"agent/chuma-workspace.sh"),cmd,project,*extra)
+
+def jobq(cmd, *extra):
+    return run(str(APP_ROOT/"agent/chuma-job-queue.sh"),cmd,*extra)
+
+def capability(mode, risk):
+    return run(str(APP_ROOT/"agent/chuma-capability-firewall.sh"),"check",mode,risk)
+
+def task_meta(task):
+    return run(str(APP_ROOT/"agent/chuma-task-language.sh"),"parse",task)
 
 def parse_kv(s):
     out={}
@@ -126,6 +135,16 @@ class Handler(BaseHTTPRequestHandler):
             return self.sendj(200,{"status":"ok" if rc==0 and rc2==0 else "degraded","services":services,"containers":containers,
                                   "health":json.loads(hout) if hout else None,"ready":json.loads(rout) if rout else None,
                                   "safe_mode":(CONTROL_ROOT/"state/SAFE_MODE").exists(),"timestamp":time.time()})
+        if path=="/api/jobs":
+            rc,out,err=jobq("list")
+            return self.sendj(200 if rc==0 else 409,{"ok":rc==0,"jobs":[x for x in out.splitlines() if x]})
+        m=re.fullmatch(r"/api/jobs/(JOB-[0-9]{8})",path)
+        if m:
+            rc,out,err=jobq("get",m.group(1))
+            return self.sendj(200 if rc==0 else 404,{"ok":rc==0,"job":parse_kv(out) if rc==0 else None,"error":err})
+        if path=="/api/servers":
+            rc,out,err=run(str(APP_ROOT/"agent/chuma-server-registry.sh"),"list")
+            return self.sendj(200 if rc==0 else 409,{"ok":rc==0,"servers":out.splitlines()})
         if path=="/api/projects":
             projects=[]
             for p in PROJECTS:
@@ -157,9 +176,26 @@ class Handler(BaseHTTPRequestHandler):
             rc,out,err=workspace("resume",project)
         elif intent=="stop":
             rc,out,err=workspace("stop",project)
-        elif intent=="set-task":
+        elif intent in ("set-task","create-job"):
             if not SAFE_TASK.fullmatch(task): return self.sendj(400,{"error":"invalid_task"})
+            meta_rc,meta_out,meta_err=task_meta(task)
+            meta=parse_kv(meta_out) if meta_rc==0 else {}
+            mode=str(data.get("mode") or meta.get("mode") or "NORMAL")
+            risk=str(data.get("risk") or meta.get("risk") or "WRITE")
+            if (CONTROL_ROOT/"state/SAFE_MODE").exists():
+                return self.sendj(423,{"error":"safe_mode","message":"new execution jobs are blocked"})
+            cap_rc,cap_out,cap_err=capability(mode,risk)
+            if cap_rc!=0:
+                return self.sendj(403,{"error":"capability_denied","mode":mode,"risk":risk})
+            jrc,jout,jerr=jobq("create",project,task,mode,session,risk)
+            if jrc!=0:
+                return self.sendj(409,{"error":"job_create_failed","detail":jerr})
+            job_id=jout.splitlines()[-1].strip()
             rc,out,err=workspace("set-task",project,task)
+            if rc==0:
+                return self.sendj(200,{"ok":True,"intent":intent,"project":project,"job_id":job_id,"mode":mode,"risk":risk,"output":out})
+            jobq("set-status",job_id,"FAILED","","workspace_set_task_failed")
+            return self.sendj(409,{"ok":False,"intent":intent,"project":project,"job_id":job_id,"output":out,"error":err})
         elif intent=="safe-mode-on":
             rc,out,err=run(str(APP_ROOT/"agent/chuma-workspace.sh"),"safe-mode","on")
         elif intent=="safe-mode-off":
