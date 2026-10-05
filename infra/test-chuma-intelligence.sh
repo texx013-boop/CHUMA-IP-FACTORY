@@ -21,4 +21,5 @@ out="$("$I" goal update FILM_COMBAIN blocked 'build failed' 'restore checkpoint'
 grep -q '^status=blocked$' <<<"$out"
 out="$("$I" watch FILM_COMBAIN)"; grep -q 'signal=goal_blocked' <<<"$out"
 out="$("$I" context FILM_COMBAIN)"; grep -q 'CHUMA CONTEXT' <<<"$out"; grep -q "^autonomy_mode=L3$" <<<"$out"
+out="$("$ROOT/agent/chuma-control.sh" intelligence autonomy status 2>/dev/null)" || true
 echo 'CHUMA Intelligence Core: OK'
