@@ -23,7 +23,8 @@ chmod 600 "$LOG_FILE"
 
 log() { printf '%s %s\n' "$(date -Is)" "$*" | tee -a "$LOG_FILE"; }
 compose() { "$APP_ROOT/infra/compose-run.sh" --env-file "$1" -f "$2" "${@:3}"; }
-git_env=(env GIT_SSH_COMMAND="ssh -i $GITHUB_KEY -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$KNOWN_HOSTS")
+GIT_SSH_COMMAND="ssh -i $GITHUB_KEY -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$KNOWN_HOSTS"
+git_env=(env GIT_SSH_COMMAND="$GIT_SSH_COMMAND")
 remote_sha() { "${git_env[@]}" git ls-remote "$REPO" "refs/heads/$BRANCH" | awk 'NR==1{print $1}'; }
 healthy() { curl -fsS --max-time 5 http://127.0.0.1/health >/dev/null 2>&1; }
 
@@ -208,6 +209,7 @@ while true; do
     [[ -f "$TMP/source/$required" ]] || { log "release rejected: missing $required"; trap - EXIT; cleanup; sleep "$INTERVAL"; continue 2; }
   done
 
+  chmod +x "$TMP/source/infra/compose-run.sh"
   cp "$ENV_FILE" "$TMP/source/infra/.env"
   chmod 600 "$TMP/source/infra/.env"
 
