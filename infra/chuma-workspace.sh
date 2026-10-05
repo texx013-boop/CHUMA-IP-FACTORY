@@ -127,6 +127,11 @@ lock() {
   local project="$1" session="$2" lease="${3:-$DEFAULT_LEASE_SECONDS}" dir now expires
   valid_project "$project" || { echo "invalid project id" >&2; return 64; }
   valid_session "$session" || { echo "invalid session id" >&2; return 64; }
+  if [[ -f "$SAFE_MODE_FILE" ]]; then
+    echo "workspace.lock=blocked_safe_mode" >&2
+    record "$project" lock "denied_safe_mode" "$session"
+    return 78
+  fi
   [[ "$lease" =~ ^[0-9]+$ ]] && (( lease >= 30 && lease <= 86400 )) || { echo "invalid lease seconds" >&2; return 64; }
   ensure_state "$project"
   expire_lock_if_needed "$project"
