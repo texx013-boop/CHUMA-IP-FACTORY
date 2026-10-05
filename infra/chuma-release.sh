@@ -35,12 +35,7 @@ require_safe_name() {
 
 manifest_value() {
   local manifest="$1" key="$2"
-  awk -v wanted="$key" '
-    /^[A-Za-z_][A-Za-z0-9_]*=[A-Za-z0-9._-]+$/ {
-      split($0, p, "=")
-      if (p[1] == wanted) { print p[2]; exit }
-    }
-  ' "$manifest"
+  awk -F= -v wanted="$key" '$1 == wanted { print $2; exit }' "$manifest"
 }
 
 verify_bundle() {
