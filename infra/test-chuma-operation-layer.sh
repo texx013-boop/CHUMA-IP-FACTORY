@@ -20,7 +20,7 @@ check_parse(){
   grep -q '^risk=' <<<"$out"
   grep -q '^capability=' <<<"$out"
 }
-check_parse SHUMA_SPACE STATUS "проверь SHUMA.SPACE"
+check_parse SHUMA_SPACE VERIFY "проверь SHUMA.SPACE"
 check_parse SHUMA_SPACE RESUME "продолжи SHUMA.SPACE"
 check_parse FILM_COMBAIN STOP "останови Film Combain"
 check_parse PERSONAL_AI_COMPANION SET_TASK "поставь задачу Personal AI Companion: подготовить статус"
