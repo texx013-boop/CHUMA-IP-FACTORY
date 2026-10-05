@@ -104,13 +104,13 @@ class Handler(BaseHTTPRequestHandler):
             if not SAFE_TASK.fullmatch(task): return self.sendj(400,{"error":"invalid_task"})
             rc,out,err=workspace("set-task",project,task)
         elif intent=="safe-mode-on":
-            rc,out,err=workspace("safe-mode","dummy","on")
+            rc,out,err=run(str(APP_ROOT/"agent/chuma-workspace.sh"),"safe-mode","on")
         elif intent=="safe-mode-off":
-            rc,out,err=workspace("safe-mode","dummy","off")
+            rc,out,err=run(str(APP_ROOT/"agent/chuma-workspace.sh"),"safe-mode","off")
         elif intent=="verify":
             rc,out,err=run(str(APP_ROOT/"agent/chuma-control.sh"),"health",timeout=30)
         elif intent=="restart-app":
-            rc,out,err=run("systemctl","restart","chuma-agent.service",timeout=30)
+            rc,out,err=run(str(APP_ROOT/"infra/compose-run.sh"),"--env-file",str(ENV_FILE),"-f",str(APP_ROOT/"infra/compose.yml"),"restart","app",timeout=60)
         else:
             rc,out,err=0,"status",""
         return self.sendj(200 if rc==0 else 409,{"ok":rc==0,"intent":intent,"project":project,"output":out,"error":err})
