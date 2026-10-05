@@ -199,7 +199,7 @@ while true; do
   fi
 
   cp -a "$TMP/source" "$TMP/source.checked"
-  if find "$TMP/source.checked" -type f -name '.env' -o -name '*.pem' -o -name '*.key' | grep -q .; then
+  if find "$TMP/source.checked" -type f \( -name '.env' -o -name '*.pem' -o -name '*.key' \) -print -quit | grep -q .; then
     log "release rejected: secret-like files present"
     trap - EXIT; cleanup; sleep "$INTERVAL"; continue
   fi
