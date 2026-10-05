@@ -90,7 +90,9 @@ jobs:
             test -f "infra/$unit"
           done
           grep -q "git@github.com:texx013-boop/CHUMA-IP-FACTORY.git" infra/auto-update.sh
-          grep -q 'git -C "\$TMP/repo" archive "\$SHA"' infra/auto-update.sh
+          grep -q 'git -C "\$TMP/repo" archive --format=tar HEAD' infra/auto-update.sh
+          grep -q 'release archive fallback succeeded' infra/auto-update.sh
+          grep -q 'release archive fallback failed' infra/auto-update.sh
           grep -q 'agent refresh failed; deployment is not accepted' infra/auto-update.sh
           grep -q 'process_handoff()' infra/auto-update.sh
           grep -q 'local release handoff detected' infra/auto-update.sh
