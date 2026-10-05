@@ -86,6 +86,14 @@ Current Video Combain hardening includes tests for image → video chaining, ide
 - Video Combain validates character/content/artifact provenance both at job creation and again immediately before rendering.
 - Video job listing supports an owner-scoped `character_id` filter and rejects foreign-character filters.
 
+## CHUMA Control plane
+
+**CHUMA Control is the production control plane.** The server is the execution center for CHUMA IP FACTORY / SHUMA.SPACE and future projects. GitHub is retained as a source-code/history/CI provider and independent code backup, not as the runtime authority.
+
+The control plane is designed to become provider-agnostic: releases may arrive from GitHub today and from verified local handoff or another source adapter in the future. Each project is isolated by configuration, secrets, containers, data, health checks, backup and rollback policy.
+
+Core principle: **IDENTITY FOLLOWS CHUMA, NOT THE SERVER.**
+
 ## Autonomous server runtime
 
 The production server is designed to run as an autonomous control loop:
