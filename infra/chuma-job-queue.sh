@@ -36,15 +36,35 @@ max_attempts=2
 EOF
   chmod 600 "$JOBS/$id.env"; emit "$id" CREATED "project=$p mode=$mode risk=$risk"; printf '%s\n' "$id"
 }
+sanitize(){ printf '%s' "${1:-}" | tr '\r\n|' '   '; }
+set_field(){
+ local f="$1" key="$2" value="$3" tmp
+ tmp="${f}.tmp.$"
+ awk -v k="$key" -v v="$value" 'index($0,k"=")==1 {print k"="v; found=1; next} {print} END {if(!found) print k"="v}' "$f" > "$tmp"
+ chmod 600 "$tmp"; mv -f "$tmp" "$f"
+}
 set_status(){
- local id="$1" st="$2" result="${3:-}" error="${4:-}" f="$JOBS/$1.env"
+ local id="$1" st="$2" result error f="$JOBS/$1.env"
  [[ -f "$f" ]] || { echo job_not_found >&2; return 44; }
  [[ "$st" =~ ^(QUEUED|DISPATCHED|RUNNING|VERIFYING|SUCCEEDED|FAILED|RETRYING|BLOCKED|CANCELLED)$ ]] || { echo invalid_status >&2; return 64; }
- sed -i "s/^status=.*/status=$st/; s/^task_status=.*/task_status=$(printf "%s" "$st" | tr "[:upper:]" "[:lower:]")/; s/^updated_at=.*/updated_at=$(date -Is)/; s/^stage=.*/stage=$st/; s/^result=.*/result=$result/; s/^error=.*/error=$error/" "$f"
+ result="$(sanitize "${3:-}")"; error="$(sanitize "${4:-}")"
+ set_field "$f" status "$st"; set_field "$f" task_status "${st,,}"; set_field "$f" updated_at "$(date -Is)"; set_field "$f" stage "$st"; set_field "$f" result "$result"; set_field "$f" error "$error"
  emit "$id" "STATUS_$st" "result=$result error=$error"; cat "$f"
 }
 get(){ [[ -f "$JOBS/$1.env" ]] || return 44; cat "$JOBS/$1.env"; }
-list(){ for f in "$JOBS"/JOB-*.env; do [[ -f "$f" ]] || continue; . "$f"; printf '%s|%s|%s|%s|%s|%s\n' "$job_id" "$project" "$status" "$stage" "$autonomy_mode" "$updated_at"; done | sort -t'|' -k6,6r; }
+list(){
+ local f id project status stage mode updated
+ for f in "$JOBS"/JOB-*.env; do
+   [[ -f "$f" ]] || continue
+   id="$(grep -m1 '^job_id=' "$f" | cut -d= -f2-)"
+   project="$(grep -m1 '^project=' "$f" | cut -d= -f2-)"
+   status="$(grep -m1 '^status=' "$f" | cut -d= -f2-)"
+   stage="$(grep -m1 '^stage=' "$f" | cut -d= -f2-)"
+   mode="$(grep -m1 '^autonomy_mode=' "$f" | cut -d= -f2-)"
+   updated="$(grep -m1 '^updated_at=' "$f" | cut -d= -f2-)"
+   printf '%s|%s|%s|%s|%s|%s\n' "$id" "$project" "$status" "$stage" "$mode" "$updated"
+ done | sort -t'|' -k6,6r
+}
 retry(){
  local id="$1" f="$JOBS/$id.env" attempts max_attempts
  [[ -f "$f" ]] || { echo job_not_found >&2; return 44; }
