@@ -82,6 +82,9 @@ verify_bundle() {
     (cd "$tmp" && sha256sum -c manifest.sha256 >/dev/null) || die "manifest checksum verification failed"
   fi
 
+  trap - RETURN
+  rm -rf "$tmp"
+
   printf 'bundle.ok=true\n'
   printf 'project=%s\n' "$project_id"
   printf 'release=%s\n' "$release_id"
