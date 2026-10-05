@@ -59,28 +59,8 @@ class API(BaseHTTPRequestHandler):
         b=json.dumps(obj,ensure_ascii=False).encode(); self.send_response(status); self.send_header('Content-Type','application/json; charset=utf-8'); self.send_header('Cache-Control','no-store');
         for k,v in (extra or {}).items(): self.send_header(k,v)
         self.send_header('Content-Length',str(len(b))); self.end_headers(); self.wfile.write(b)
-    def send_control_html(self):
-        html = r"""<!doctype html>
-<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>CHUMA CONTROL</title>
-<style>
-:root{--bg:#06070b;--panel:#10131b;--panel2:#151a24;--line:#2a3040;--text:#f5f7fb;--muted:#8e98aa;--a:#8f5cff;--ok:#69e6a4;--bad:#ff647d;--warn:#f4c95d}
-*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 80% 0,rgba(143,92,255,.18),transparent 32%),var(--bg);color:var(--text);font:14px/1.45 system-ui,-apple-system,Segoe UI,sans-serif}main{max-width:1250px;margin:auto;padding:22px}.top{display:flex;justify-content:space-between;gap:15px;align-items:center;margin-bottom:18px}.brand{font-size:22px;font-weight:850}.sub{color:var(--muted);font-size:12px}.pill{padding:8px 11px;border:1px solid var(--line);border-radius:999px;background:#0d1016}.grid{display:grid;grid-template-columns:1.2fr .8fr;gap:15px}.card{background:linear-gradient(145deg,#11151e,#0b0e14);border:1px solid var(--line);border-radius:17px;padding:18px;box-shadow:0 18px 50px #0006}.head{display:flex;justify-content:space-between;align-items:center;margin-bottom:13px}.head h2{margin:0;font-size:16px}.status{font-size:12px;color:var(--muted)}.good{color:var(--ok)}.bad{color:var(--bad)}button{border:1px solid var(--line);background:#171c26;color:#eef1f7;padding:10px 13px;border-radius:10px;cursor:pointer}button.primary{background:linear-gradient(135deg,#7040dc,#9d72ff);color:#090a0e;border:0;font-weight:800}button.danger{border-color:#63303b;color:#ff9aaa}.actions{display:flex;gap:8px;flex-wrap:wrap}.project{border:1px solid var(--line);border-radius:13px;padding:14px;margin:9px 0;background:#0c1017}.project-title{font-weight:800}.kv{display:grid;grid-template-columns:145px 1fr;gap:3px 10px;color:#b6becb;font-size:12px;margin:9px 0}.kv b{color:#fff;font-weight:600}.task{display:grid;gap:9px}textarea,input{width:100%;background:#090c12;color:#fff;border:1px solid #303746;border-radius:10px;padding:11px;font:inherit}textarea{min-height:105px;resize:vertical}.small{font-size:11px;color:var(--muted)}pre{white-space:pre-wrap;word-break:break-word;background:#090c11;border:1px solid var(--line);border-radius:10px;padding:12px;max-height:260px;overflow:auto}.toast{position:fixed;right:18px;bottom:18px;background:#171c25;border:1px solid var(--line);padding:12px 14px;border-radius:11px;display:none}.mobile{display:none}@media(max-width:800px){main{padding:13px}.grid{grid-template-columns:1fr}.top{align-items:flex-start}.mobile{display:inline}}
-</style></head><body><main>
-<div class="top"><div><div class="brand">CHUMA CONTROL</div><div class="sub">Внешний пульт · сервер · проекты · задачи</div></div><div class="pill" id="server">Подключение…</div></div>
-<div class="grid">
-<section class="card"><div class="head"><h2>Сервер</h2><button onclick="refresh()">Обновить</button></div><div id="serverBox" class="status">Проверка…</div><div class="actions" style="margin-top:12px"><button onclick="intent('verify','')">Проверить всё</button><button onclick="safeMode('on')">Safe Mode</button><button onclick="safeMode('off')">Снять Safe Mode</button><button class="danger" onclick="intent('restart-app','')">Перезапустить приложение</button></div></section>
-<section class="card"><div class="head"><h2>Команда</h2><span class="status">с телефона или ПК</span></div>
-<div class="task"><select id="project" onchange="renderSelected()" style="background:#090c12;color:#fff;border:1px solid #303746;border-radius:10px;padding:11px"><option value="SHUMA_SPACE">SHUMA.SPACE</option><option value="FILM_COMBAIN">Film Combain</option><option value="PERSONAL_AI_COMPANION">Personal AI Companion</option></select>
-<textarea id="task" placeholder="Например: Продолжить текущую работу и довести её до проверенного результата."></textarea>
-<div class="actions"><button class="primary" onclick="sendTask()">Поставить задачу</button><button onclick="resume()">Продолжить</button><button class="danger" onclick="stopProject()">Остановить</button></div><div class="small">Команда сохраняется на сервере и не зависит от телефона.</div></div></section>
-</div>
-<section class="card" style="margin-top:15px"><div class="head"><h2>Command Center</h2><span class="status" id="jobSummary">Загрузка…</span></div><div id="jobs">Загрузка очереди…</div><details style="margin-top:14px"><summary>Последние события</summary><pre id="events">Загрузка…</pre></details></section>
-<section class="card" style="margin-top:15px"><div class="head"><h2>Проекты</h2><span class="status">единое состояние</span></div><div id="projects">Загрузка…</div></section>
-<section class="card" style="margin-top:15px"><div class="head"><h2>История</h2><button onclick="historyLoad()">Обновить</button></div><pre id="history">Выбери проект.</pre></section>
-</main><div id="toast" class="toast"></div>
-<script>
-const $=id=>document.getElementById(id);let data=[],jobs=[];
+    def send_control_js(self):
+        js = r"""const $=id=>document.getElementById(id);let data=[],jobs=[];
 function headers(){return {'Content-Type':'application/json'}}
 async function api(path,opt={}){let r=await fetch('/control/api'+path,Object.assign({credentials:'include',headers:headers()},opt));let x=await r.json().catch(()=>({}));if(r.status===401)throw Error('Требуется сопряжение владельца');if(!r.ok)throw Error(x.error||x.message||'Ошибка');return x}
 async function auth(){try{let x=await api('/auth/status');if(!x.authenticated){showPair()}else{hidePair();refresh()}}catch(e){showPair()}}
@@ -102,8 +82,36 @@ async function resume(){await intent('resume','')}
 async function stopProject(){await intent('stop','')}
 async function doProject(p,i){$('project').value=p;await intent(i,'')}
 async function safeMode(mode){try{let x=await api('/intent',{method:'POST',headers:headers(),body:JSON.stringify({project:'CONTROL',intent:'safe-mode-'+mode,session:'web-control'})});toast(x.ok?'Safe Mode: '+mode:x.error);await refresh()}catch(e){toast(e.message)}}
-auth();setInterval(()=>auth(),30000)
-</script></body></html>"""
+auth();setInterval(()=>auth(),30000)"""
+        b = js.encode('utf-8')
+        self.send_response(200)
+        self.send_header('Content-Type','application/javascript; charset=utf-8')
+        self.send_header('Cache-Control','no-store, no-cache, must-revalidate, max-age=0')
+        self.send_header('Content-Length',str(len(b)))
+        self.end_headers()
+        self.wfile.write(b)
+
+    def send_control_html(self):
+        html = r"""<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CHUMA CONTROL</title>
+<style>
+:root{--bg:#06070b;--panel:#10131b;--panel2:#151a24;--line:#2a3040;--text:#f5f7fb;--muted:#8e98aa;--a:#8f5cff;--ok:#69e6a4;--bad:#ff647d;--warn:#f4c95d}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 80% 0,rgba(143,92,255,.18),transparent 32%),var(--bg);color:var(--text);font:14px/1.45 system-ui,-apple-system,Segoe UI,sans-serif}main{max-width:1250px;margin:auto;padding:22px}.top{display:flex;justify-content:space-between;gap:15px;align-items:center;margin-bottom:18px}.brand{font-size:22px;font-weight:850}.sub{color:var(--muted);font-size:12px}.pill{padding:8px 11px;border:1px solid var(--line);border-radius:999px;background:#0d1016}.grid{display:grid;grid-template-columns:1.2fr .8fr;gap:15px}.card{background:linear-gradient(145deg,#11151e,#0b0e14);border:1px solid var(--line);border-radius:17px;padding:18px;box-shadow:0 18px 50px #0006}.head{display:flex;justify-content:space-between;align-items:center;margin-bottom:13px}.head h2{margin:0;font-size:16px}.status{font-size:12px;color:var(--muted)}.good{color:var(--ok)}.bad{color:var(--bad)}button{border:1px solid var(--line);background:#171c26;color:#eef1f7;padding:10px 13px;border-radius:10px;cursor:pointer}button.primary{background:linear-gradient(135deg,#7040dc,#9d72ff);color:#090a0e;border:0;font-weight:800}button.danger{border-color:#63303b;color:#ff9aaa}.actions{display:flex;gap:8px;flex-wrap:wrap}.project{border:1px solid var(--line);border-radius:13px;padding:14px;margin:9px 0;background:#0c1017}.project-title{font-weight:800}.kv{display:grid;grid-template-columns:145px 1fr;gap:3px 10px;color:#b6becb;font-size:12px;margin:9px 0}.kv b{color:#fff;font-weight:600}.task{display:grid;gap:9px}textarea,input{width:100%;background:#090c12;color:#fff;border:1px solid #303746;border-radius:10px;padding:11px;font:inherit}textarea{min-height:105px;resize:vertical}.small{font-size:11px;color:var(--muted)}pre{white-space:pre-wrap;word-break:break-word;background:#090c11;border:1px solid var(--line);border-radius:10px;padding:12px;max-height:260px;overflow:auto}.toast{position:fixed;right:18px;bottom:18px;background:#171c25;border:1px solid var(--line);padding:12px 14px;border-radius:11px;display:none}.mobile{display:none}@media(max-width:800px){main{padding:13px}.grid{grid-template-columns:1fr}.top{align-items:flex-start}.mobile{display:inline}}
+</style></head><body><main>
+<div class="top"><div><div class="brand">CHUMA CONTROL</div><div class="sub">Внешний пульт · сервер · проекты · задачи</div></div><div class="pill" id="server">Подключение…</div></div>
+<div class="grid">
+<section class="card"><div class="head"><h2>Сервер</h2><button onclick="refresh()">Обновить</button></div><div id="serverBox" class="status">Проверка…</div><div class="actions" style="margin-top:12px"><button onclick="intent('verify','')">Проверить всё</button><button onclick="safeMode('on')">Safe Mode</button><button onclick="safeMode('off')">Снять Safe Mode</button><button class="danger" onclick="intent('restart-app','')">Перезапустить приложение</button></div></section>
+<section class="card"><div class="head"><h2>Команда</h2><span class="status">с телефона или ПК</span></div>
+<div class="task"><select id="project" onchange="renderSelected()" style="background:#090c12;color:#fff;border:1px solid #303746;border-radius:10px;padding:11px"><option value="SHUMA_SPACE">SHUMA.SPACE</option><option value="FILM_COMBAIN">Film Combain</option><option value="PERSONAL_AI_COMPANION">Personal AI Companion</option></select>
+<textarea id="task" placeholder="Например: Продолжить текущую работу и довести её до проверенного результата."></textarea>
+<div class="actions"><button class="primary" onclick="sendTask()">Поставить задачу</button><button onclick="resume()">Продолжить</button><button class="danger" onclick="stopProject()">Остановить</button></div><div class="small">Команда сохраняется на сервере и не зависит от телефона.</div></div></section>
+</div>
+<section class="card" style="margin-top:15px"><div class="head"><h2>Command Center</h2><span class="status" id="jobSummary">Загрузка…</span></div><div id="jobs">Загрузка очереди…</div><details style="margin-top:14px"><summary>Последние события</summary><pre id="events">Загрузка…</pre></details></section>
+<section class="card" style="margin-top:15px"><div class="head"><h2>Проекты</h2><span class="status">единое состояние</span></div><div id="projects">Загрузка…</div></section>
+<section class="card" style="margin-top:15px"><div class="head"><h2>История</h2><button onclick="historyLoad()">Обновить</button></div><pre id="history">Выбери проект.</pre></section>
+</main><div id="toast" class="toast"></div>
+<script src="/control-ui.js?v=2"></script></body></html>"""
         b=html.encode('utf-8'); self.send_response(200); self.send_header('Content-Type','text/html; charset=utf-8'); self.send_header('Cache-Control','no-store, no-cache, must-revalidate, max-age=0'); self.send_header('Pragma','no-cache'); self.send_header('Expires','0'); self.send_header('Content-Length',str(len(b))); self.end_headers(); self.wfile.write(b)
 
     def send_html(self):
@@ -324,6 +332,8 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLower
 
     def do_GET(self):
         p = urllib.parse.urlsplit(self.path).path
+        if p == '/control-ui.js':
+            return self.send_control_js()
         if p == '/control':
             return self.send_control_html()
         if p in ('/','/ui','/gallery'):
