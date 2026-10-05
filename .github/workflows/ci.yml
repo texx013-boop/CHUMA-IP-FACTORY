@@ -38,7 +38,7 @@ jobs:
           for f in infra/*.sh; do bash -n "$f"; done
           sh -n infra/backup.sh
           mkdir -p /opt/chuma/agent
-          for script in chuma-agent.sh auto-update.sh chuma-watchdog.sh chuma-security-agent.sh; do
+          for script in chuma-agent.sh auto-update.sh chuma-watchdog.sh chuma-security-agent.sh chuma-control.sh; do
             touch "/opt/chuma/agent/$script"
             chmod 755 "/opt/chuma/agent/$script"
           done
