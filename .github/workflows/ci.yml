@@ -64,7 +64,10 @@ jobs:
           bash infra/test-chuma-intelligence.sh
           test -f infra/chuma-control.service
           test -f infra/chuma-control.timer
-          test -f infra/chuma-owner-identity.sh
+          test -f infra/chuma-job-dispatcher.sh
+          test -f infra/chuma-job-dispatcher.service
+          bash -n infra/chuma-job-dispatcher.sh
+                    test -f infra/chuma-owner-identity.sh
           test -f infra/chuma-approval-gate.sh
           bash -n infra/chuma-owner-identity.sh
           bash -n infra/chuma-approval-gate.sh
