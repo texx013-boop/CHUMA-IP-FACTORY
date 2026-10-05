@@ -92,12 +92,9 @@ jobs:
           grep -q 'agent-install.sh' infra/auto-update.sh
           test ! -f infra/.env
           test ! -f infra/backups/.env
-          grep -Fq 'reverse_proxy' infra/Caddyfile
-          grep -Fq 'request_body' infra/Caddyfile
-          grep -Fq 'max_size 32MB' infra/Caddyfile
-          grep -Fq 'X-Content-Type-Options' infra/Caddyfile
-          grep -Fq 'X-Frame-Options' infra/Caddyfile
-          grep -Fq 'CHUMA_UPSTREAM' infra/Caddyfile
+          for pattern in 'reverse_proxy' 'request_body' 'max_size 32MB' 'X-Content-Type-Options' 'X-Frame-Options' 'CHUMA_UPSTREAM'; do
+            grep -Fq "$pattern" infra/Caddyfile || { echo "Caddyfile contract missing: $pattern"; exit 1; }
+          done
       - name: Docker build security check
         run: |
           test -f infra/.gitignore
