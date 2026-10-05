@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import json, os, re, socket, subprocess, time
+import json, os, re, socket, subprocess, time, secrets
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from socketserver import UnixStreamServer
@@ -12,6 +12,9 @@ PROJECTS=("SHUMA_SPACE","FILM_COMBAIN","PERSONAL_AI_COMPANION")
 ALLOWED_INTENTS={"status","resume","stop","set-task","safe-mode-on","safe-mode-off","verify","restart-app"}
 SAFE_TASK=re.compile(r"^[^\r\n]{1,2000}$")
 SAFE_PROJECT=re.compile(r"^[A-Za-z0-9._-]+$")
+PAIRING_FILE=CONTROL_ROOT/"state/control-pairing-code"
+SESSION_FILE=CONTROL_ROOT/"state/control-session"
+SESSION_TTL=30*24*3600
 
 def load_token():
     try:
@@ -21,6 +24,39 @@ def load_token():
     except Exception:
         pass
     return os.getenv("CHUMA_ADMIN_TOKEN","").strip()
+
+def session_value():
+    try:
+        raw=SESSION_FILE.read_text().strip().split("|",1)
+        if len(raw)==2 and int(raw[1]) > int(time.time()):
+            return raw[0]
+    except Exception:
+        pass
+    return ""
+
+def issue_session():
+    token=secrets.token_urlsafe(32)
+    SESSION_FILE.parent.mkdir(parents=True,exist_ok=True)
+    SESSION_FILE.write_text(f"{token}|{int(time.time())+SESSION_TTL}")
+    os.chmod(SESSION_FILE,0o600)
+    return token
+
+def auth_session(value):
+    return bool(value) and secrets.compare_digest(value,session_value())
+
+def auth_pair(code):
+    try:
+        expected=PAIRING_FILE.read_text().strip()
+        return bool(expected) and secrets.compare_digest(code,expected)
+    except Exception:
+        return False
+
+def generate_pairing():
+    code=secrets.token_urlsafe(18)
+    PAIRING_FILE.parent.mkdir(parents=True,exist_ok=True)
+    PAIRING_FILE.write_text(code)
+    os.chmod(PAIRING_FILE,0o600)
+    return code
 
 def run(*args, timeout=30):
     p=subprocess.run(args,capture_output=True,text=True,timeout=timeout)
@@ -40,10 +76,13 @@ class Handler(BaseHTTPRequestHandler):
     server_version="CHUMA-Control-Agent/1.0"
     def log_message(self,*args): pass
     def auth(self):
+        for item in self.headers.get("Cookie","").split(";"):
+            if item.strip().startswith("chuma_session="):
+                return auth_session(item.strip().split("=",1)[1])
         token=load_token()
         value=self.headers.get("Authorization","")
         supplied=value[7:].strip() if value.startswith("Bearer ") else ""
-        return bool(token) and bool(supplied) and supplied==token
+        return bool(token) and bool(supplied) and secrets.compare_digest(supplied,token)
     def sendj(self,status,obj):
         b=json.dumps(obj,ensure_ascii=False).encode()
         self.send_response(status); self.send_header("Content-Type","application/json; charset=utf-8")
@@ -52,8 +91,29 @@ class Handler(BaseHTTPRequestHandler):
         n=min(int(self.headers.get("Content-Length","0") or 0),32768)
         return json.loads(self.rfile.read(n) or b"{}")
     def do_GET(self):
-        if not self.auth(): return self.sendj(401,{"error":"unauthorized"})
         path=self.path.split("?",1)[0]
+        if path=="/api/pair":
+            code=self.headers.get("X-CHUMA-Pairing-Code","").strip()
+            if not auth_pair(code):
+                return self.sendj(401,{"error":"invalid_pairing"})
+            session=issue_session()
+            PAIRING_FILE.unlink(missing_ok=True)
+            self.send_response(200)
+            self.send_header("Content-Type","application/json; charset=utf-8")
+            self.send_header("Cache-Control","no-store")
+            self.send_header("Set-Cookie",f"chuma_session={session}; Path=/control; Max-Age={SESSION_TTL}; HttpOnly; SameSite=Strict")
+            self.end_headers()
+            self.wfile.write(b'{"ok":true}')
+            return
+        if path=="/api/auth/status":
+            return self.sendj(200,{"authenticated":self.auth()})
+        if path=="/api/auth/logout":
+            SESSION_FILE.unlink(missing_ok=True)
+            self.send_response(200)
+            self.send_header("Set-Cookie","chuma_session=; Path=/control; Max-Age=0; HttpOnly; SameSite=Strict")
+            self.end_headers()
+            return
+        if not self.auth(): return self.sendj(401,{"error":"unauthorized"})
         if path=="/api/status":
             services={}
             for unit in ("chuma-agent.service","chuma-auto-update.service","chuma-watchdog.service","chuma-security-agent.service","chuma-control.service"):
@@ -116,6 +176,9 @@ class Server(UnixStreamServer):
     allow_reuse_address=True
 
 def main():
+    if len(os.sys.argv)>1 and os.sys.argv[1]=="pair":
+        print(generate_pairing())
+        return
     CONTROL_ROOT.mkdir(parents=True,exist_ok=True)
     try: SOCKET_PATH.unlink()
     except FileNotFoundError: pass
