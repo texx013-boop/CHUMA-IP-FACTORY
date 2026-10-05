@@ -43,6 +43,11 @@ status() {
 
 registry() { init_registry; cat "$REGISTRY_FILE"; }
 
+release() {
+  [[ $# -eq 2 ]] || { printf "Usage: chuma-control.sh release {verify|stage|promote} <bundle>\n" >&2; return 64; }
+  "$APP_ROOT/agent/chuma-release.sh" "$1" "$2"
+}
+
 health() {
   local failed=0
   for unit in chuma-agent.service chuma-auto-update.service chuma-watchdog.service chuma-security-agent.service; do
@@ -62,7 +67,7 @@ health() {
 usage() {
   cat <<'EOF'
 CHUMA CONTROL
-Usage: chuma-control.sh {status|registry|health|init}
+Usage: chuma-control.sh {status|registry|health|init|release} ...
 EOF
 }
 
@@ -71,6 +76,7 @@ case "${1:-status}" in
   registry) registry ;;
   init) init_registry ;;
   health) health ;;
+  release) release "$@" ;;
   -h|--help|help) usage ;;
   *) usage >&2; exit 64 ;;
 esac
