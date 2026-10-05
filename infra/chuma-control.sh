@@ -7,11 +7,13 @@ STATE_DIR="$CONTROL_ROOT/state"
 PROJECTS_DIR="$CONTROL_ROOT/projects"
 INCOMING_DIR="$CONTROL_ROOT/incoming"
 RELEASES_DIR="$CONTROL_ROOT/releases"
+WORKSPACE_STATE_DIR="$STATE_DIR/workspaces"
+WORKSPACE_LOCK_DIR="$STATE_DIR/workspace-locks"
 LOG_FILE="$STATE_DIR/control.log"
 REGISTRY_FILE="${CHUMA_PROJECT_REGISTRY:-$PROJECTS_DIR/registry.env}"
 
-mkdir -p "$STATE_DIR" "$PROJECTS_DIR" "$INCOMING_DIR" "$RELEASES_DIR"
-chmod 700 "$CONTROL_ROOT" "$STATE_DIR" "$PROJECTS_DIR" "$INCOMING_DIR" "$RELEASES_DIR"
+mkdir -p "$STATE_DIR" "$PROJECTS_DIR" "$INCOMING_DIR" "$RELEASES_DIR" "$WORKSPACE_STATE_DIR" "$WORKSPACE_LOCK_DIR"
+chmod 700 "$CONTROL_ROOT" "$STATE_DIR" "$PROJECTS_DIR" "$INCOMING_DIR" "$RELEASES_DIR" "$WORKSPACE_STATE_DIR" "$WORKSPACE_LOCK_DIR"
 touch "$LOG_FILE"
 chmod 600 "$LOG_FILE"
 
@@ -37,11 +39,18 @@ status() {
   printf 'incoming=%s\n' "$INCOMING_DIR"
   printf 'releases=%s\n' "$RELEASES_DIR"
   printf 'registry=%s\n' "$REGISTRY_FILE"
+  printf 'workspace_state=%s\n' "$WORKSPACE_STATE_DIR"
+  printf 'workspace_locks=%s\n' "$WORKSPACE_LOCK_DIR"
   printf 'registry_present=%s\n' "$([[ -f "$REGISTRY_FILE" ]] && echo true || echo false)"
   printf 'incoming_files=%s\n' "$(find "$INCOMING_DIR" -maxdepth 1 -type f 2>/dev/null | wc -l | tr -d ' ')"
 }
 
 registry() { init_registry; cat "$REGISTRY_FILE"; }
+
+workspace() {
+  [[ $# -ge 2 ]] || { printf 'Usage: chuma-control.sh workspace {status|resume|stop} <project>\n' >&2; return 64; }
+  "$APP_ROOT/agent/chuma-workspace.sh" "$@"
+}
 
 release() {
   [[ $# -eq 2 ]] || { printf "Usage: chuma-control.sh release {verify|stage|promote} <bundle>\n" >&2; return 64; }
@@ -95,6 +104,7 @@ case "${1:-status}" in
   health) health ;;
   reconcile) reconcile ;;
   release) release "$2" "$3" ;;
+  workspace) shift; workspace "$@" ;;
   -h|--help|help) usage ;;
   *) usage >&2; exit 64 ;;
 esac
