@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-APP_ROOT="\${APP_ROOT:-/opt/chuma}"
-CONTROL_ROOT="\${CHUMA_CONTROL_ROOT:-$APP_ROOT/control}"
+APP_ROOT="${APP_ROOT:-/opt/chuma}"
+CONTROL_ROOT="${CHUMA_CONTROL_ROOT:-$APP_ROOT/control}"
 INCOMING_DIR="$CONTROL_ROOT/incoming"
 STAGING_DIR="$CONTROL_ROOT/staging"
 RELEASES_DIR="$CONTROL_ROOT/releases"
@@ -131,7 +131,7 @@ promote_bundle() {
   rm -rf "$tmp"
 }
 
-case "\${1:-}" in
+case "${1:-}" in
   verify) [[ $# -eq 2 ]] || { usage >&2; exit 64; }; verify_bundle "$2" ;;
   stage) [[ $# -eq 2 ]] || { usage >&2; exit 64; }; stage_bundle "$2" ;;
   promote) [[ $# -eq 2 ]] || { usage >&2; exit 64; }; promote_bundle "$2" ;;
