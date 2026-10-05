@@ -27,6 +27,115 @@ git_env=(env GIT_SSH_COMMAND="ssh -i $GITHUB_KEY -o IdentitiesOnly=yes -o Strict
 remote_sha() { "${git_env[@]}" git ls-remote "$REPO" "refs/heads/$BRANCH" | awk 'NR==1{print $1}'; }
 healthy() { curl -fsS --max-time 5 http://127.0.0.1/health >/dev/null 2>&1; }
 
+process_handoff() {
+  local bundle=""
+  local found=0
+  shopt -s nullglob
+  for candidate in "$APP_ROOT/control/incoming/"*.tar.gz; do
+    bundle="$candidate"
+    found=1
+    break
+  done
+  shopt -u nullglob
+  [[ "$found" -eq 1 ]] || return 1
+
+  log "local release handoff detected: $bundle"
+  if ! "$APP_ROOT/agent/chuma-release.sh" verify "$bundle" >/dev/null; then
+    log "local release rejected during verification: $bundle"
+    return 0
+  fi
+
+  local release_path=""
+  if ! release_path="$("$APP_ROOT/agent/chuma-release.sh" promote "$bundle" | tail -n 1)"; then
+    log "local release promotion failed: $bundle"
+    return 0
+  fi
+  [[ -d "$release_path" ]] || {
+    log "local release promotion produced invalid path: $release_path"
+    return 0
+  }
+
+  if [[ ! -f "$ENV_FILE" ]]; then
+    log "local release blocked: deployment environment file is missing"
+    rm -rf "$release_path"
+    return 0
+  fi
+  mkdir -p "$release_path/infra"
+  cp "$ENV_FILE" "$release_path/infra/.env"
+  chmod 600 "$release_path/infra/.env"
+
+  if ! "$release_path/infra/compose-run.sh" --env-file "$release_path/infra/.env" -f "$release_path/infra/compose.yml" config -q; then
+    log "local release rejected: compose validation failed"
+    rm -rf "$release_path"
+    return 0
+  fi
+
+  if [[ -x "$APP_ROOT/agent/agent-backup.sh" ]]; then
+    local snap=""
+    if ! snap="$("$APP_ROOT/agent/agent-backup.sh" 2>/dev/null)"; then
+      log "local release blocked: pre-update snapshot failed"
+      rm -rf "$release_path"
+      return 0
+    fi
+    log "local release pre-update snapshot: $snap"
+  fi
+
+  rm -rf "$PREVIOUS_DIR"
+  if [[ -d "$RELEASE_DIR" ]]; then mv "$RELEASE_DIR" "$PREVIOUS_DIR"; fi
+  mv "$release_path" "$RELEASE_DIR"
+
+  local deployed_ok=0
+  if compose "$RELEASE_DIR/infra/.env" "$RELEASE_DIR/infra/compose.yml" up -d --build; then
+    for i in $(seq 1 36); do
+      if healthy; then deployed_ok=1; break; fi
+      sleep 5
+    done
+  fi
+
+  if [[ "$deployed_ok" -eq 1 ]]; then
+    if ! "$RELEASE_DIR/infra/agent-install.sh" >/dev/null 2>&1; then
+      log "local release agent refresh failed; deployment is not accepted"
+      deployed_ok=0
+    fi
+  fi
+
+  if [[ "$deployed_ok" -eq 1 ]]; then
+    local handoff_sha=""
+    [[ -f "$STATE_DIR/handoff_sha" ]] && handoff_sha="$(cat "$STATE_DIR/handoff_sha" || true)"
+    if [[ ! "$handoff_sha" =~ ^[0-9a-f]{40}$ ]]; then
+      log "local release rejected: promoted SHA is invalid"
+      deployed_ok=0
+    else
+      printf '%s\n' "$handoff_sha" > "$STATE_DIR/deployed_sha"
+      chmod 600 "$STATE_DIR/deployed_sha"
+      rm -rf "$PREVIOUS_DIR"
+      rm -f "$bundle"
+      log "local release deployment successful: $handoff_sha"
+    fi
+  fi
+
+  if [[ "$deployed_ok" -ne 1 ]]; then
+    log "local release deployment failed; restoring previous release"
+    compose "$RELEASE_DIR/infra/.env" "$RELEASE_DIR/infra/compose.yml" down >/dev/null 2>&1 || true
+    rm -rf "$RELEASE_DIR"
+    if [[ -d "$PREVIOUS_DIR" ]]; then
+      mv "$PREVIOUS_DIR" "$RELEASE_DIR"
+      if "$RELEASE_DIR/infra/agent-install.sh" >/dev/null 2>&1 &&
+         compose "$RELEASE_DIR/infra/.env" "$RELEASE_DIR/infra/compose.yml" up -d --build >/dev/null 2>&1 &&
+         "$RELEASE_DIR/infra/agent-verify.sh" >/dev/null 2>&1; then
+        log "previous release restored after local handoff failure"
+      else
+        log "previous release restore failed after local handoff failure"
+      fi
+    else
+      log "no previous release available after local handoff failure"
+    fi
+    rm -rf "$release_path" 2>/dev/null || true
+  fi
+
+  return 0
+}
+
 exec 9>"$LOCK_FILE"
 flock -n 9 || exit 0
 log "auto-update started repo=$REPO branch=$BRANCH interval=${INTERVAL}s enabled=$AUTO_UPDATE"
