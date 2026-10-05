@@ -67,6 +67,9 @@ jobs:
           test -f infra/chuma-job-dispatcher.sh
           test -f infra/chuma-job-dispatcher.service
           bash -n infra/chuma-job-dispatcher.sh
+          grep -q "retry()" infra/chuma-job-queue.sh
+          grep -q "max_attempts=2" infra/chuma-job-queue.sh
+          grep -q "job_retrying" infra/chuma-job-dispatcher.sh
           for executor in SHUMA_SPACE FILM_COMBAIN PERSONAL_AI_COMPANION; do
             test -f "infra/executors/$executor.sh"
             bash -n "infra/executors/$executor.sh"
