@@ -1,4 +1,25 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-parse(){ local t="$*"; [[ -n "$t" ]] || exit 64; local mode=NORMAL risk=WRITE; [[ "$t" =~ (^|[[:space:]])(SAFE|NORMAL|AUTONOMOUS|MAX_AUTONOMOUS)([[:space:]]|$) ]] && mode="${BASH_REMATCH[2]}"; [[ "$t" =~ (^|[[:space:]])(READ|WRITE|BUILD|TEST|DEPLOY|NETWORK|DATABASE|DOCKER|SERVER)([[:space:]]|$) ]] && risk="${BASH_REMATCH[2]}"; printf 'mode=%s\nrisk=%s\ntask=%s\n' "$mode" "$risk" "$t"; }
-case "${1:-}" in parse) shift; parse "$@";; *) echo "usage: parse TASK" >&2; exit 64;; esac
+parse(){
+  local project="${1:-}" task="${2:-}"
+  [[ "$project" =~ ^(SHUMA_SPACE|FILM_COMBAIN|PERSONAL_AI_COMPANION)$ ]] || { echo "invalid_project" >&2; return 64; }
+  [[ -n "$task" && "${#task}" -le 2000 && "$task" != *$'\n'* && "$task" != *$'\r'* ]] || { echo "invalid_task" >&2; return 64; }
+  local text="${task,,}" operation=VERIFY risk=READ capability=READ
+  if [[ "$text" =~ (останов|stop) ]]; then
+    operation=STOP; risk=WRITE; capability=WRITE
+  elif [[ "$text" =~ (продолж|возобнов|resume) ]]; then
+    operation=RESUME; risk=WRITE; capability=WRITE
+  elif [[ "$text" =~ (поставь[[:space:]]+задач|установи[[:space:]]+задач|set[[:space:]]*task) ]]; then
+    operation=SET_TASK; risk=WRITE; capability=WRITE
+  elif [[ "$text" =~ (проверь|провер|verify|status|статус) ]]; then
+    operation=VERIFY
+  else
+    echo "unknown_operation" >&2
+    return 44
+  fi
+  printf 'mode=NORMAL\nrisk=%s\ncapability=%s\napproval=NO\nproject=%s\noperation=%s\ntask=%s\n' "$risk" "$capability" "$project" "$operation" "$task"
+}
+case "${1:-}" in
+  parse) shift; [[ $# -eq 2 ]] || exit 64; parse "$1" "$2";;
+  *) echo "usage: parse PROJECT TASK" >&2; exit 64;;
+esac
