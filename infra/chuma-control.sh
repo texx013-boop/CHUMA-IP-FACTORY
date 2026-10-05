@@ -76,7 +76,7 @@ case "${1:-status}" in
   registry) registry ;;
   init) init_registry ;;
   health) health ;;
-  release) release "$@" ;;
+  release) release "$2" "$3" ;;
   -h|--help|help) usage ;;
   *) usage >&2; exit 64 ;;
 esac
