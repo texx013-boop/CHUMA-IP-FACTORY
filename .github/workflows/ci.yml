@@ -95,7 +95,7 @@ jobs:
             grep -Fq "$pattern" infra/Caddyfile || { echo "Caddyfile contract missing: $pattern"; exit 1; }
           done
       - name: Release handoff integration test
-        run: bash -x infra/test-chuma-release-handoff.sh
+        run: bash infra/test-chuma-release-handoff.sh
 
       - name: Docker build security check
         run: |
