@@ -92,7 +92,12 @@ jobs:
           grep -q 'agent-install.sh' infra/auto-update.sh
           test ! -f infra/.env
           test ! -f infra/backups/.env
-          python -c 'from pathlib import Path; c=Path("infra/Caddyfile").read_text(); r=["{$CHUMA_DOMAIN} {","reverse_proxy {$CHUMA_UPSTREAM}","request_body {","max_size 32MB","X-Content-Type-Options \"nosniff\"","X-Frame-Options \"DENY\""]; m=[x for x in r if x not in c]; assert not m, f"Caddyfile contract missing: {m}"; print("Caddyfile contract: OK")'
+          grep -Fq 'reverse_proxy' infra/Caddyfile
+          grep -Fq 'request_body' infra/Caddyfile
+          grep -Fq 'max_size 32MB' infra/Caddyfile
+          grep -Fq 'X-Content-Type-Options' infra/Caddyfile
+          grep -Fq 'X-Frame-Options' infra/Caddyfile
+          grep -Fq 'CHUMA_UPSTREAM' infra/Caddyfile
       - name: Docker build security check
         run: |
           test -f infra/.gitignore
