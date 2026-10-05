@@ -31,6 +31,7 @@ EOF
 }
 
 status() {
+  init_registry
   printf 'CHUMA CONTROL\n'
   printf 'control_root=%s\n' "$CONTROL_ROOT"
   printf 'incoming=%s\n' "$INCOMING_DIR"
