@@ -92,8 +92,8 @@ jobs:
           grep -q 'agent-install.sh' infra/auto-update.sh
           test ! -f infra/.env
           test ! -f infra/backups/.env
-          grep -q '^{$CHUMA_DOMAIN} {' infra/Caddyfile
-          grep -q 'reverse_proxy {$CHUMA_UPSTREAM}' infra/Caddyfile
+          grep -Fq '{$CHUMA_DOMAIN} {' infra/Caddyfile
+          grep -Fq 'reverse_proxy {$CHUMA_UPSTREAM}' infra/Caddyfile
           grep -q 'request_body {' infra/Caddyfile
           grep -q 'max_size 32MB' infra/Caddyfile
           grep -q 'X-Content-Type-Options "nosniff"' infra/Caddyfile
