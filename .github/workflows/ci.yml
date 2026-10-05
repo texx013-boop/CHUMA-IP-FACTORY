@@ -107,6 +107,9 @@ jobs:
           for pattern in 'reverse_proxy' 'request_body' 'max_size 32MB' 'X-Content-Type-Options' 'X-Frame-Options' 'CHUMA_UPSTREAM'; do
             grep -Fq "$pattern" infra/Caddyfile || { echo "Caddyfile contract missing: $pattern"; exit 1; }
           done
+      - name: Remote control agent syntax
+        run: bash infra/test-chuma-control-api.sh
+
       - name: Release handoff integration test
         run: bash infra/test-chuma-release-handoff.sh
 
