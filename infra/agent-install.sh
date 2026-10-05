@@ -16,6 +16,7 @@ install -m 0755 "$INFRA_DIR/github-access.sh" "$AGENT_DIR/github-access.sh"
 install -m 0755 "$INFRA_DIR/backup-verify.sh" "$AGENT_DIR/backup-verify.sh"
 install -m 0755 "$INFRA_DIR/chuma-control.sh" "$AGENT_DIR/chuma-control.sh"
 install -m 0755 "$INFRA_DIR/chuma-workspace.sh" "$AGENT_DIR/chuma-workspace.sh"
+install -m 0755 "$INFRA_DIR/chuma-intelligence.sh" "$AGENT_DIR/chuma-intelligence.sh"
 install -m 0755 "$INFRA_DIR/chuma-release.sh" "$AGENT_DIR/chuma-release.sh"
 
 install -m 0644 "$INFRA_DIR/chuma-agent.service" /etc/systemd/system/chuma-agent.service
