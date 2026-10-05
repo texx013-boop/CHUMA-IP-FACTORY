@@ -151,7 +151,8 @@ event() {
 }
 
 events() {
-  local p="$1" f="$EVENT_ROOT/${p}.log"
+  local p="$1" f
+  f="$EVENT_ROOT/${p}.log"
   valid_project "$p" || return 64
   [[ -f "$f" ]] && cat "$f" || printf 'events=empty\n'
 }
@@ -174,7 +175,8 @@ EOF
 }
 
 recovery_status() {
-  local p="$1" f="$RECOVERY_ROOT/${p}.checkpoint"
+  local p="$1" f
+  f="$RECOVERY_ROOT/${p}.checkpoint"
   valid_project "$p" || return 64
   [[ -f "$f" ]] && cat "$f" || printf 'recovery.checkpoint=none\n'
 }
@@ -194,7 +196,10 @@ context() {
 }
 
 watch() {
-  local p="$1" g="$GOAL_ROOT/${p}.state" w="$CONTROL_ROOT/state/workspaces/${p}.state" f="$EVENT_ROOT/${p}.log"
+  local p="$1" g w f
+  g="$GOAL_ROOT/${p}.state"
+  w="$CONTROL_ROOT/state/workspaces/${p}.state"
+  f="$EVENT_ROOT/${p}.log"
   valid_project "$p" || return 64
   local signaled=0
   if [[ -f "$g" ]]; then
