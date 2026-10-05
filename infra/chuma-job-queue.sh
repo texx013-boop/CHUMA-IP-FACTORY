@@ -31,6 +31,8 @@ stage=QUEUED
 result=
 error=
 correlation_id=$id
+attempts=0
+max_attempts=2
 EOF
   chmod 600 "$JOBS/$id.env"; emit "$id" CREATED "project=$p mode=$mode risk=$risk"; printf '%s\n' "$id"
 }
@@ -43,12 +45,27 @@ set_status(){
 }
 get(){ [[ -f "$JOBS/$1.env" ]] || return 44; cat "$JOBS/$1.env"; }
 list(){ for f in "$JOBS"/JOB-*.env; do [[ -f "$f" ]] || continue; . "$f"; printf '%s|%s|%s|%s|%s|%s\n' "$job_id" "$project" "$status" "$stage" "$autonomy_mode" "$updated_at"; done | sort -t'|' -k6,6r; }
+retry(){
+ local id="$1" f="$JOBS/$id.env" attempts max_attempts
+ [[ -f "$f" ]] || { echo job_not_found >&2; return 44; }
+ attempts=$(grep -E '^attempts=' "$f" | cut -d= -f2- || echo 0)
+ max_attempts=$(grep -E '^max_attempts=' "$f" | cut -d= -f2- || echo 2)
+ [[ "$attempts" =~ ^[0-9]+$ && "$max_attempts" =~ ^[0-9]+$ ]] || return 65
+ if (( attempts >= max_attempts )); then
+   set_status "$id" BLOCKED "" retry_limit_reached >/dev/null
+   return 75
+ fi
+ attempts=$((attempts+1))
+ sed -i "s/^attempts=.*/attempts=$attempts/; s/^updated_at=.*/updated_at=$(date -Is)/" "$f"
+ set_status "$id" RETRYING "" "retry_attempt=$attempts" >/dev/null
+}
 events(){ [[ -f "$EVENTS/events.log" ]] && tail -n 200 "$EVENTS/events.log" || true; }
 case "${1:-}" in
  create) [[ $# -ge 3 && $# -le 6 ]] || exit 64; create "$2" "$3" "${4:-NORMAL}" "${5:-mobile-control}" "${6:-WRITE}" ;;
  set-status) [[ $# -ge 3 && $# -le 5 ]] || exit 64; set_status "$2" "$3" "${4:-}" "${5:-}" ;;
  get) get "$2" ;;
  list) list ;;
+ retry) [[ $# -eq 2 ]] || exit 64; retry "$2" ;;
  events) events ;;
  *) echo "usage: create|get|list|events|set-status" >&2; exit 64 ;;
 esac
