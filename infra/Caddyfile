@@ -1,6 +1,6 @@
 {$CHUMA_DOMAIN} {
     encode gzip
-    reverse_proxy app:8097
+    reverse_proxy localhost:8097
 
     header {
         -Server
