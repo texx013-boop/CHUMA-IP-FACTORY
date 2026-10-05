@@ -137,11 +137,32 @@ class Handler(BaseHTTPRequestHandler):
                                   "safe_mode":(CONTROL_ROOT/"state/SAFE_MODE").exists(),"timestamp":time.time()})
         if path=="/api/jobs":
             rc,out,err=jobq("list")
-            return self.sendj(200 if rc==0 else 409,{"ok":rc==0,"jobs":[x for x in out.splitlines() if x]})
+            jobs=[]
+            for line in out.splitlines():
+                parts=line.split("|")
+                if len(parts)>=6:
+                    jobs.append({"job_id":parts[0],"project":parts[1],"status":parts[2],"stage":parts[3],"mode":parts[4],"updated_at":parts[5]})
+            return self.sendj(200 if rc==0 else 409,{"ok":rc==0,"jobs":jobs,"count":len(jobs)})
+        if path=="/api/events":
+            rc,out,err=jobq("events")
+            events=[]
+            for line in out.splitlines():
+                parts=line.split("|",3)
+                if len(parts)==4:
+                    events.append({"time":parts[0],"job_id":parts[1],"event":parts[2],"detail":parts[3]})
+            return self.sendj(200 if rc==0 else 409,{"ok":rc==0,"events":events[-200:]})
         m=re.fullmatch(r"/api/jobs/(JOB-[0-9]{8})",path)
         if m:
             rc,out,err=jobq("get",m.group(1))
             return self.sendj(200 if rc==0 else 404,{"ok":rc==0,"job":parse_kv(out) if rc==0 else None,"error":err})
+        if path=="/api/capabilities":
+            rc,out,err=run(str(APP_ROOT/"agent/chuma-capability-firewall.sh"),"init")
+            rc2,out2,err2=run("cat",str(CONTROL_ROOT/"state/capabilities.env"))
+            caps={}
+            for line in out2.splitlines():
+                if "=" in line:
+                    k,v=line.split("=",1); caps[k]=v
+            return self.sendj(200,{"ok":rc2==0,"capabilities":caps})
         if path=="/api/servers":
             rc,out,err=run(str(APP_ROOT/"agent/chuma-server-registry.sh"),"list")
             return self.sendj(200 if rc==0 else 409,{"ok":rc==0,"servers":out.splitlines()})
