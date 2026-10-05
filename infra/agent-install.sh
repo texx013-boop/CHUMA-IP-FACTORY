@@ -24,6 +24,8 @@ install -m 0755 "$INFRA_DIR/chuma-task-language.sh" "$AGENT_DIR/chuma-task-langu
 install -m 0755 "$INFRA_DIR/chuma-owner-identity.sh" "$AGENT_DIR/chuma-owner-identity.sh"
 install -m 0755 "$INFRA_DIR/chuma-approval-gate.sh" "$AGENT_DIR/chuma-approval-gate.sh"
 install -m 0755 "$INFRA_DIR/chuma-job-dispatcher.sh" "$AGENT_DIR/chuma-job-dispatcher.sh"
+install -d -m 0700 "$AGENT_DIR/executors"
+for executor in SHUMA_SPACE FILM_COMBAIN PERSONAL_AI_COMPANION; do install -m 0755 "$INFRA_DIR/executors/$executor.sh" "$AGENT_DIR/executors/$executor.sh"; done
 install -m 0755 "$INFRA_DIR/chuma-intelligence.sh" "$AGENT_DIR/chuma-intelligence.sh"
 install -m 0755 "$INFRA_DIR/chuma-release.sh" "$AGENT_DIR/chuma-release.sh"
 
