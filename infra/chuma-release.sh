@@ -35,7 +35,7 @@ require_safe_name() {
 
 manifest_value() {
   local manifest="$1" key="$2"
-  awk -F= -v wanted="$key" '$1 == wanted { value=$2; sub(/\\r$/, "", value); print value; exit }' "$manifest"
+  awk -F= -v wanted="$key" '$1 == wanted { value=$2; sub(/\r$/, "", value); print value; exit }' "$manifest"
 }
 
 verify_bundle() {
