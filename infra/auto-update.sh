@@ -31,30 +31,6 @@ exec 9>"$LOCK_FILE"
 flock -n 9 || exit 0
 log "auto-update started repo=$REPO branch=$BRANCH interval=${INTERVAL}s enabled=$AUTO_UPDATE"
 
-HANDOFF_DIR="${CHUMA_CONTROL_ROOT:-$APP_ROOT/control}/incoming"
-HANDOFF_AGENT="$APP_ROOT/agent/chuma-release.sh"
-
-process_handoff() {
-  [[ -x "$HANDOFF_AGENT" && -d "$HANDOFF_DIR" ]] || return 1
-  local bundle
-  bundle="$(find "$HANDOFF_DIR" -maxdepth 1 -type f -name '*.tar.gz' -printf '%T@ %p\\n' 2>/dev/null | sort -nr | awk 'NR==1{print substr($0,index($0," ")+1)}')"
-  [[ -n "$bundle" && -f "$bundle" ]] || return 1
-  log "local handoff detected: $bundle"
-  if ! "$HANDOFF_AGENT" verify "$bundle" >/dev/null 2>&1; then
-    log "local handoff rejected: verification failed"
-    return 1
-  fi
-  if ! "$HANDOFF_AGENT" promote "$bundle" >/dev/null 2>&1; then
-    log "local handoff rejected: promotion failed"
-    return 1
-  fi
-  local release_dir
-  release_dir="$(tar -tzf "$bundle" | awk -F/ '$1=="release"{print; exit}')"
-  log "local handoff promoted successfully"
-  rm -f "$bundle"
-  return 0
-}
-
 while true; do
   if [[ "$AUTO_UPDATE" != "true" ]]; then sleep "$INTERVAL"; continue; fi
   if process_handoff; then sleep "$INTERVAL"; continue; fi
