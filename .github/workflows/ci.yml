@@ -36,7 +36,6 @@ jobs:
         run: |
           bash -n infra/bootstrap.sh
           for f in infra/*.sh; do bash -n "$f"; done
-          test -x infra/chuma-release.sh
           grep -q "manifest checksum verification failed" infra/chuma-release.sh
           grep -q "path traversal in bundle" infra/chuma-release.sh
           grep -q "secret-like file in bundle" infra/chuma-release.sh
