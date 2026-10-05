@@ -1,5 +1,11 @@
 {$CHUMA_DOMAIN} {
     encode gzip
+
+    @control path /control/api/*
+    handle @control {
+        reverse_proxy unix//opt/chuma/control/control.sock
+    }
+
     reverse_proxy {$CHUMA_UPSTREAM}
 
     header {
