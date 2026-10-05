@@ -50,6 +50,15 @@ release() {
 
 health() {
   local failed=0
+  init_registry
+  for project in SHUMA_SPACE FILM_COMBAIN PERSONAL_AI_COMPANION; do
+    if ! grep -q "^\\${project}=enabled$" "$REGISTRY_FILE"; then
+      printf 'project.%s=disabled\\n' "$project"
+      failed=1
+    else
+      printf 'project.%s=enabled\\n' "$project"
+    fi
+  done
   for unit in chuma-agent.service chuma-auto-update.service chuma-watchdog.service chuma-security-agent.service; do
     if ! systemctl is-active --quiet "$unit"; then
       printf 'service.%s=down\n' "$unit"
@@ -64,10 +73,18 @@ health() {
   return "$failed"
 }
 
+reconcile() {
+  init_registry
+  local rc=0
+  health || rc=$?
+  printf 'control.reconcile=%s\n' "$([[ "$rc" -eq 0 ]] && echo ok || echo degraded)"
+  return "$rc"
+}
+
 usage() {
   cat <<'EOF'
 CHUMA CONTROL
-Usage: chuma-control.sh {status|registry|health|init|release} ...
+Usage: chuma-control.sh {status|registry|health|reconcile|init|release} ...
 EOF
 }
 
@@ -76,6 +93,7 @@ case "${1:-status}" in
   registry) registry ;;
   init) init_registry ;;
   health) health ;;
+  reconcile) reconcile ;;
   release) release "$2" "$3" ;;
   -h|--help|help) usage ;;
   *) usage >&2; exit 64 ;;
