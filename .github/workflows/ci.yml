@@ -92,22 +92,7 @@ jobs:
           grep -q 'agent-install.sh' infra/auto-update.sh
           test ! -f infra/.env
           test ! -f infra/backups/.env
-          python - <<'PY'
-          from pathlib import Path
-          c = Path("infra/Caddyfile").read_text()
-          required = [
-              "{$CHUMA_DOMAIN} {",
-              "reverse_proxy {$CHUMA_UPSTREAM}",
-              "request_body {",
-              "max_size 32MB",
-              'X-Content-Type-Options "nosniff"',
-              'X-Frame-Options "DENY"',
-          ]
-          missing = [x for x in required if x not in c]
-          assert not missing, f"Caddyfile contract missing: {missing}"
-          print("Caddyfile contract: OK")
-          PY
-
+          python -c 'from pathlib import Path; c=Path("infra/Caddyfile").read_text(); r=["{$CHUMA_DOMAIN} {","reverse_proxy {$CHUMA_UPSTREAM}","request_body {","max_size 32MB","X-Content-Type-Options \"nosniff\"","X-Frame-Options \"DENY\""]; m=[x for x in r if x not in c]; assert not m, f"Caddyfile contract missing: {m}"; print("Caddyfile contract: OK")'
       - name: Docker build security check
         run: |
           test -f infra/.gitignore
