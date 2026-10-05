@@ -92,8 +92,12 @@ stage_bundle() {
   local bundle="$1"
   verify_bundle "$bundle" >/dev/null
   local release_id
-  release_id="$(tar -xOzf "$bundle" manifest.env | awk -F= '$1=="CHUMA_RELEASE_ID" && $2 ~ /^[A-Za-z0-9._-]+$/ {print $2; exit}')"
-  [[ -n "$release_id" ]] || die "invalid release id"
+  local staged_manifest="$STAGING_DIR/.stage-manifest.$"
+  tar -xOzf "$bundle" manifest.env > "$staged_manifest"
+  chmod 600 "$staged_manifest"
+  release_id="$(manifest_value "$staged_manifest" CHUMA_RELEASE_ID)"
+  rm -f "$staged_manifest"
+  require_safe_name "$release_id"
   local target="$INCOMING_DIR/$release_id.tar.gz"
   install -m 0600 "$bundle" "$target"
   log "release staged: $release_id"
