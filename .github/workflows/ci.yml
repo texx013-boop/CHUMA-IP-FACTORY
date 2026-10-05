@@ -93,6 +93,8 @@ jobs:
           grep -q 'git -C "\$TMP/repo" archive --format=tar HEAD' infra/auto-update.sh
           grep -q 'release archive fallback succeeded' infra/auto-update.sh
           grep -q 'release archive fallback failed' infra/auto-update.sh
+          grep -q 'http://127.0.0.1/ready' infra/auto-update.sh
+          grep -q 'http://127.0.0.1/ready' infra/agent-verify.sh
           grep -q 'agent refresh failed; deployment is not accepted' infra/auto-update.sh
           grep -q 'process_handoff()' infra/auto-update.sh
           grep -q 'local release handoff detected' infra/auto-update.sh
