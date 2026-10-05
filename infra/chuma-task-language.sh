@@ -11,7 +11,9 @@ parse(){
     operation=RESUME; risk=WRITE; capability=WRITE
   elif [[ "$text" =~ (поставь[[:space:]]+задач|установи[[:space:]]+задач|set[[:space:]]*task) ]]; then
     operation=SET_TASK; risk=WRITE; capability=WRITE
-  elif [[ "$text" =~ (проверь|провер|verify|status|статус) ]]; then
+  elif [[ "$text" =~ (status|статус) ]]; then
+    operation=STATUS
+  elif [[ "$text" =~ (проверь|провер|verify) ]]; then
     operation=VERIFY
   else
     echo "unknown_operation" >&2
