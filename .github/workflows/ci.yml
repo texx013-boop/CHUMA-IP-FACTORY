@@ -70,6 +70,9 @@ jobs:
           grep -q "retry()" infra/chuma-job-queue.sh
           grep -q "max_attempts=2" infra/chuma-job-queue.sh
           grep -q "job_retrying" infra/chuma-job-dispatcher.sh
+          grep -q "stale_job_timeout" infra/chuma-job-dispatcher.sh
+          grep -q "job_recovered" infra/chuma-job-dispatcher.sh
+          grep -q "task_status=.*tr" infra/chuma-job-queue.sh
           for executor in SHUMA_SPACE FILM_COMBAIN PERSONAL_AI_COMPANION; do
             test -f "infra/executors/$executor.sh"
             bash -n "infra/executors/$executor.sh"
