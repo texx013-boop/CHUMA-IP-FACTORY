@@ -67,6 +67,10 @@ jobs:
           test -f infra/chuma-job-dispatcher.sh
           test -f infra/chuma-job-dispatcher.service
           bash -n infra/chuma-job-dispatcher.sh
+          for executor in SHUMA_SPACE FILM_COMBAIN PERSONAL_AI_COMPANION; do
+            test -f "infra/executors/$executor.sh"
+            bash -n "infra/executors/$executor.sh"
+          done
                     test -f infra/chuma-owner-identity.sh
           test -f infra/chuma-approval-gate.sh
           bash -n infra/chuma-owner-identity.sh
