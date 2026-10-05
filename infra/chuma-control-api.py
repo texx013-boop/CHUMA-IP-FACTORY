@@ -151,6 +151,19 @@ class Handler(BaseHTTPRequestHandler):
                 if len(parts)==4:
                     events.append({"time":parts[0],"job_id":parts[1],"event":parts[2],"detail":parts[3]})
             return self.sendj(200 if rc==0 else 409,{"ok":rc==0,"events":events[-200:]})
+        m=re.fullmatch(r"/api/jobs/(JOB-[0-9]{8})/(approve|deny)",path)
+        if m:
+            job_id,decision=m.group(1),m.group(2)
+            rc,out,err=jobq("get",job_id)
+            if rc!=0: return self.sendj(404,{"error":"job_not_found"})
+            gate=str(APP_ROOT/"agent/chuma-approval-gate.sh")
+            gr,go,ge=run(gate,decision,job_id)
+            if gr!=0: return self.sendj(409,{"error":"approval_update_failed","detail":ge})
+            if decision=="approve":
+                jobq("set-status",job_id,"QUEUED")
+            else:
+                jobq("set-status",job_id,"CANCELLED","", "owner_denied")
+            return self.sendj(200,{"ok":True,"job_id":job_id,"decision":decision})
         m=re.fullmatch(r"/api/jobs/(JOB-[0-9]{8})",path)
         if m:
             rc,out,err=jobq("get",m.group(1))
@@ -212,9 +225,16 @@ class Handler(BaseHTTPRequestHandler):
             if jrc!=0:
                 return self.sendj(409,{"error":"job_create_failed","detail":jerr})
             job_id=jout.splitlines()[-1].strip()
+            approval="NOT_REQUIRED"
+            if risk in ("DEPLOY","DATABASE","DOCKER","SERVER"):
+                ar,ao,ae=run(str(APP_ROOT/"agent/chuma-approval-gate.sh"),"request",job_id)
+                approval="PENDING" if ar==0 else "GATE_ERROR"
+                if ar==0:
+                    jobq("set-status",job_id,"BLOCKED","", "owner_approval_required")
+                    return self.sendj(202,{"ok":True,"intent":intent,"project":project,"job_id":job_id,"mode":mode,"risk":risk,"approval":approval})
             rc,out,err=workspace("set-task",project,task)
             if rc==0:
-                return self.sendj(200,{"ok":True,"intent":intent,"project":project,"job_id":job_id,"mode":mode,"risk":risk,"output":out})
+                return self.sendj(200,{"ok":True,"intent":intent,"project":project,"job_id":job_id,"mode":mode,"risk":risk,"approval":approval,"output":out})
             jobq("set-status",job_id,"FAILED","","workspace_set_task_failed")
             return self.sendj(409,{"ok":False,"intent":intent,"project":project,"job_id":job_id,"output":out,"error":err})
         elif intent=="safe-mode-on":
