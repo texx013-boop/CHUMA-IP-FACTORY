@@ -9,3 +9,7 @@ grep -q "Secure" "$ROOT/infra/chuma-control-api.py"
 grep -q "PAIRING_META_FILE" "$ROOT/infra/chuma-control-api.py"
 echo "CHUMA control API syntax: OK"
 
+grep -q 'pair_requires_post' "$ROOT/infra/chuma-control-api.py"
+grep -q 'method:' "$ROOT/chuma_ip_factory/api.py"
+grep -q 'pairOwner' "$ROOT/chuma_ip_factory/api.py"
+! grep -q "prompt('Одноразовый код сопряжения CHUMA" "$ROOT/chuma_ip_factory/api.py"
