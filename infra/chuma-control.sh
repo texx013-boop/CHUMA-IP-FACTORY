@@ -52,7 +52,7 @@ health() {
   local failed=0
   init_registry
   for project in SHUMA_SPACE FILM_COMBAIN PERSONAL_AI_COMPANION; do
-    if ! grep -q "^\\${project}=enabled$" "$REGISTRY_FILE"; then
+    if ! grep -q "^${project}=enabled$" "$REGISTRY_FILE"; then
       printf 'project.%s=disabled\\n' "$project"
       failed=1
     else
