@@ -59,9 +59,6 @@ class Handler(BaseHTTPRequestHandler):
             for unit in ("chuma-agent.service","chuma-auto-update.service","chuma-watchdog.service","chuma-security-agent.service","chuma-control.service"):
                 rc,_,_=run("systemctl","is-active",unit)
                 services[unit]="ok" if rc==0 else "down"
-            rc,_,_=run("docker","ps","--format","{{.Names}}|{{.Status}}")
-            containers=[x for x in _.splitlines()] if False else []
-            # docker output is stdout, not stderr
             rc,out,err=run("docker","ps","--format","{{.Names}}|{{.Status}}")
             containers=[dict(zip(("name","status"),x.split("|",1))) for x in out.splitlines() if "|" in x]
             rc,hout,_=run("curl","-fsS","--max-time","5","http://127.0.0.1/health")
