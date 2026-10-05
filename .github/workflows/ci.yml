@@ -2,7 +2,7 @@ name: CHUMA IP FACTORY CI
 
 on:
   push:
-    branches: ["main"]
+    branches: ["main", "feature/chuma-anywhere-workspace"]
   pull_request:
     branches: ["main"]
 
