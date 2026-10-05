@@ -18,12 +18,17 @@ service_active() {
 }
 
 while true; do
-  for svc in chuma-agent.service chuma-auto-update.service; do
+  for svc in chuma-agent.service chuma-auto-update.service chuma-security-agent.service; do
     if ! service_active "$svc"; then
       log "service unhealthy: $svc; attempting restart"
       systemctl restart "$svc" || log "restart failed: $svc"
     fi
   done
+
+  if ! systemctl is-active --quiet chuma-backup.timer; then
+    log "backup timer unhealthy; attempting restart"
+    systemctl restart chuma-backup.timer || log "backup timer restart failed"
+  fi
 
   if ! curl -fsS --max-time 5 http://127.0.0.1/health >/dev/null 2>&1; then
     log "application health check failed"
