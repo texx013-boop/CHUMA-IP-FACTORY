@@ -53,6 +53,8 @@ jobs:
           grep -q 'sha256sum "\$FILE" > "\$FILE.sha256"' infra/backup.sh
           grep -q 'sha256sum -c "\$checksum"' infra/backup-verify.sh
           grep -q 'gzip -t "\$latest"' infra/backup-verify.sh
+          grep -q 'auth_rate_limited' chuma_ip_factory/api.py
+          grep -q 'Retry-After' chuma_ip_factory/api.py
           grep -q 'chuma-agent.service chuma-auto-update.service chuma-watchdog.service chuma-security-agent.service' infra/agent-install.sh
           grep -q 'systemctl enable --now chuma-backup.timer' infra/agent-install.sh
           for unit in chuma-agent.service chuma-auto-update.service chuma-watchdog.service chuma-security-agent.service chuma-backup.service chuma-backup.timer; do
