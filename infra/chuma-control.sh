@@ -43,10 +43,26 @@ status() {
 
 registry() { init_registry; cat "$REGISTRY_FILE"; }
 
+health() {
+  local failed=0
+  for unit in chuma-agent.service chuma-auto-update.service chuma-watchdog.service chuma-security-agent.service; do
+    if ! systemctl is-active --quiet "$unit"; then
+      printf 'service.%s=down\\n' "$unit"
+      failed=1
+    else
+      printf 'service.%s=ok\\n' "$unit"
+    fi
+  done
+  if systemctl is-active --quiet chuma-backup.timer; then printf 'backup.timer=ok\\n'; else printf 'backup.timer=down\\n'; failed=1; fi
+  if systemctl is-active --quiet chuma-control.timer; then printf 'control.timer=ok\\n'; else printf 'control.timer=down\\n'; failed=1; fi
+  if curl -fsS --max-time 5 http://127.0.0.1/health >/dev/null 2>&1; then printf 'app.health=ok\\n'; else printf 'app.health=down\\n'; failed=1; fi
+  return "$failed"
+}
+
 usage() {
   cat <<'EOF'
 CHUMA CONTROL
-Usage: chuma-control.sh {status|registry|init}
+Usage: chuma-control.sh {status|registry|health|init}
 EOF
 }
 
