@@ -16,7 +16,9 @@ CHUMA_PROJECT_ID=CHUMA-IP-FACTORY
 CHUMA_RELEASE_ID=test-release-001
 CHUMA_COMMIT_SHA=0123456789abcdef0123456789abcdef01234567
 EOF
-printf 'test payload\n' > "$ROOT/work/release/payload.txt"
+cat > "$ROOT/work/release/Dockerfile" <<'EOF'
+FROM scratch
+EOF
 
 tar -czf "$ROOT/good.tar.gz" -C "$ROOT/work" manifest.env release
 
@@ -24,7 +26,7 @@ APP_ROOT="$APP_ROOT" "$APP_ROOT/agent/chuma-release.sh" verify "$ROOT/good.tar.g
 APP_ROOT="$APP_ROOT" "$APP_ROOT/agent/chuma-release.sh" stage "$ROOT/good.tar.gz" >/dev/null
 test -f "$APP_ROOT/control/incoming/test-release-001.tar.gz"
 APP_ROOT="$APP_ROOT" "$APP_ROOT/agent/chuma-release.sh" promote "$ROOT/good.tar.gz" >/dev/null
-test -f "$APP_ROOT/control/releases/test-release-001/payload.txt"
+test -f "$APP_ROOT/control/releases/test-release-001/Dockerfile"
 test "$(cat "$APP_ROOT/control/state/handoff_sha")" = "0123456789abcdef0123456789abcdef01234567"
 
 mkdir -p "$ROOT/bad/release"
@@ -35,6 +37,9 @@ CHUMA_RELEASE_ID=bad-release
 CHUMA_COMMIT_SHA=0123456789abcdef0123456789abcdef01234567
 EOF
 printf 'SECRET=must-not-pass\n' > "$ROOT/bad/release/.env"
+cat > "$ROOT/bad/release/Dockerfile" <<'EOF'
+FROM scratch
+EOF
 tar -czf "$ROOT/bad.tar.gz" -C "$ROOT/bad" manifest.env release
 if APP_ROOT="$APP_ROOT" "$APP_ROOT/agent/chuma-release.sh" verify "$ROOT/bad.tar.gz" >/dev/null 2>&1; then
   echo "bad bundle was accepted" >&2
@@ -47,6 +52,9 @@ CHUMA_BUNDLE_VERSION=1
 CHUMA_PROJECT_ID=CHUMA-IP-FACTORY
 CHUMA_RELEASE_ID=link-release
 CHUMA_COMMIT_SHA=0123456789abcdef0123456789abcdef01234567
+EOF
+cat > "$ROOT/link/release/Dockerfile" <<'EOF'
+FROM scratch
 EOF
 ln -s /tmp "$ROOT/link/release/escape"
 tar -czf "$ROOT/link.tar.gz" -C "$ROOT/link" manifest.env release
