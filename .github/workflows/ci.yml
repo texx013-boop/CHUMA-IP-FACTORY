@@ -34,6 +34,7 @@ jobs:
         run: docker build -t chuma-ip-factory:ci .
       - name: Infrastructure syntax checks
         run: |
+          set -x
           bash -n infra/bootstrap.sh
           for f in infra/*.sh; do bash -n "$f"; done
           grep -q "manifest checksum verification failed" infra/chuma-release.sh
