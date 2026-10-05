@@ -93,7 +93,7 @@ reconcile() {
 usage() {
   cat <<'EOF'
 CHUMA CONTROL
-Usage: chuma-control.sh {status|registry|health|reconcile|init|release} ...
+Usage: chuma-control.sh {status|registry|health|reconcile|init|release|workspace} ...
 EOF
 }
 
