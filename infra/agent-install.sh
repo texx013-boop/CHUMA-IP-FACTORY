@@ -23,6 +23,7 @@ install -m 0755 "$INFRA_DIR/chuma-server-registry.sh" "$AGENT_DIR/chuma-server-r
 install -m 0755 "$INFRA_DIR/chuma-task-language.sh" "$AGENT_DIR/chuma-task-language.sh"
 install -m 0755 "$INFRA_DIR/chuma-owner-identity.sh" "$AGENT_DIR/chuma-owner-identity.sh"
 install -m 0755 "$INFRA_DIR/chuma-approval-gate.sh" "$AGENT_DIR/chuma-approval-gate.sh"
+install -m 0755 "$INFRA_DIR/chuma-job-dispatcher.sh" "$AGENT_DIR/chuma-job-dispatcher.sh"
 install -m 0755 "$INFRA_DIR/chuma-intelligence.sh" "$AGENT_DIR/chuma-intelligence.sh"
 install -m 0755 "$INFRA_DIR/chuma-release.sh" "$AGENT_DIR/chuma-release.sh"
 
@@ -34,9 +35,10 @@ install -m 0644 "$INFRA_DIR/chuma-backup.service" /etc/systemd/system/chuma-back
 install -m 0644 "$INFRA_DIR/chuma-backup.timer" /etc/systemd/system/chuma-backup.timer
 install -m 0644 "$INFRA_DIR/chuma-control.service" /etc/systemd/system/chuma-control.service
 install -m 0644 "$INFRA_DIR/chuma-control.timer" /etc/systemd/system/chuma-control.timer
+install -m 0644 "$INFRA_DIR/chuma-job-dispatcher.service" /etc/systemd/system/chuma-job-dispatcher.service
 
 systemctl daemon-reload
 systemctl enable --now chuma-agent.service chuma-auto-update.service chuma-watchdog.service chuma-security-agent.service
-systemctl enable --now chuma-backup.timer chuma-control.timer
+systemctl enable --now chuma-backup.timer chuma-control.timer chuma-job-dispatcher.service
 
 echo "CHUMA Agent, Watchdog, Security Agent, Backup Timer and Control Timer installed and running."
