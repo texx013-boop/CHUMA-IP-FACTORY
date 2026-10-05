@@ -41,4 +41,18 @@ if APP_ROOT="$APP_ROOT" "$APP_ROOT/agent/chuma-release.sh" verify "$ROOT/bad.tar
   exit 1
 fi
 
+mkdir -p "$ROOT/link/release"
+cat > "$ROOT/link/manifest.env" <<'EOF'
+CHUMA_BUNDLE_VERSION=1
+CHUMA_PROJECT_ID=CHUMA-IP-FACTORY
+CHUMA_RELEASE_ID=link-release
+CHUMA_COMMIT_SHA=0123456789abcdef0123456789abcdef01234567
+EOF
+ln -s /tmp "$ROOT/link/release/escape"
+tar -czf "$ROOT/link.tar.gz" -C "$ROOT/link" manifest.env release
+if APP_ROOT="$APP_ROOT" "$APP_ROOT/agent/chuma-release.sh" verify "$ROOT/link.tar.gz" >/dev/null 2>&1; then
+  echo "link bundle was accepted" >&2
+  exit 1
+fi
+
 echo "CHUMA release handoff test: OK"
