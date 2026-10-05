@@ -92,9 +92,10 @@ stage_bundle() {
   local bundle="$1"
   verify_bundle "$bundle" >/dev/null
   local release_id
-  local staged_manifest="$STAGING_DIR/.stage-manifest.$"
-  tar -xOzf "$bundle" manifest.env > "$staged_manifest"
+  local staged_manifest
+  staged_manifest="$(mktemp "$STAGING_DIR/stage-manifest.XXXXXX")"
   chmod 600 "$staged_manifest"
+  tar -xOzf "$bundle" manifest.env > "$staged_manifest"
   release_id="$(manifest_value "$staged_manifest" CHUMA_RELEASE_ID)"
   rm -f "$staged_manifest"
   require_safe_name "$release_id"
