@@ -54,11 +54,13 @@ verify_bundle() {
   trap 'rm -rf "$tmp"' RETURN
 
   tar -tzf "$bundle" >/dev/null || die "invalid tar.gz bundle"
+  tar -tvzf "$bundle" | awk 'substr($1,1,1) == "l" || substr($1,1,1) == "h" { found=1; exit } END { exit found ? 1 : 0 }' || die "links are not allowed in bundle"
   local entries
   entries="$(tar -tzf "$bundle")"
   while IFS= read -r entry; do
     [[ -z "$entry" ]] && continue
     [[ "$entry" != /* && "$entry" != *../* && "$entry" != ../* ]] || die "path traversal in bundle"
+    [[ "$entry" == "manifest.env" || "$entry" == "manifest.sha256" || "$entry" == release/* ]] || die "unexpected path in bundle"
     [[ "$entry" != *".env"* && "$entry" != *.pem && "$entry" != *.key && "$entry" != *.p12 && "$entry" != *.pfx ]] || die "secret-like file in bundle"
   done <<< "$entries"
 
