@@ -64,6 +64,13 @@ jobs:
           bash infra/test-chuma-intelligence.sh
           test -f infra/chuma-control.service
           test -f infra/chuma-control.timer
+          test -f infra/chuma-owner-identity.sh
+          test -f infra/chuma-approval-gate.sh
+          bash -n infra/chuma-owner-identity.sh
+          bash -n infra/chuma-approval-gate.sh
+          grep -q '/api/events' infra/chuma-control-api.py
+          grep -q '/api/capabilities' infra/chuma-control-api.py
+          grep -q 'chuma-approval-gate.sh' infra/chuma-control-api.py
           test -f infra/chuma-release.sh
           grep -q 'CHUMA project registry' infra/chuma-control.sh
           grep -q 'health) health' infra/chuma-control.sh
