@@ -206,7 +206,7 @@ class Handler(BaseHTTPRequestHandler):
             self.send_response(200)
             self.send_header("Content-Type","application/json; charset=utf-8")
             self.send_header("Cache-Control","no-store")
-            self.send_header("Set-Cookie",f"chuma_session={session}; Path=/control; Max-Age={SESSION_TTL}; HttpOnly; SameSite=Strict; Secure")
+            self.send_header("Set-Cookie",f"chuma_session={session}; Path=/control; Max-Age={SESSION_TTL}; HttpOnly; SameSite=Strict")
             self.end_headers()
             self.wfile.write(b'{"ok":true}')
             return
