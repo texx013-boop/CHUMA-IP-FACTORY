@@ -57,6 +57,8 @@ jobs:
           test -f infra/github-access.sh
           test -f infra/backup-verify.sh
           test -f infra/chuma-control.sh
+          test -f infra/chuma-workspace.sh
+          bash infra/test-chuma-workspace.sh
           test -f infra/chuma-control.service
           test -f infra/chuma-control.timer
           test -f infra/chuma-release.sh
