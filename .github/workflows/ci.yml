@@ -134,6 +134,8 @@ jobs:
           grep -q 'http://127.0.0.1/ready' infra/agent-verify.sh
           grep -q 'agent refresh failed; deployment is not accepted' infra/auto-update.sh
           grep -q 'process_handoff()' infra/auto-update.sh
+          grep -q 'ci_green()' infra/auto-update.sh
+          grep -q 'required GitHub validation is not green' infra/auto-update.sh
           grep -q 'local release handoff detected' infra/auto-update.sh
           grep -q 'local release deployment successful' infra/auto-update.sh
           grep -q 'previous release restored after local handoff failure' infra/auto-update.sh
