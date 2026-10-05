@@ -70,6 +70,7 @@ case "${1:-status}" in
   status) status ;;
   registry) registry ;;
   init) init_registry ;;
+  health) health ;;
   -h|--help|help) usage ;;
   *) usage >&2; exit 64 ;;
 esac
