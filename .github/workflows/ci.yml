@@ -44,7 +44,7 @@ jobs:
           ! grep -q 'source "$tmp/manifest.env"' infra/chuma-release.sh
           sh -n infra/backup.sh
           mkdir -p /opt/chuma/agent
-          for script in chuma-agent.sh auto-update.sh chuma-watchdog.sh chuma-security-agent.sh chuma-control.sh; do
+          for script in chuma-agent.sh auto-update.sh chuma-watchdog.sh chuma-security-agent.sh chuma-control.sh chuma-workspace.sh chuma-intelligence.sh; do
             touch "/opt/chuma/agent/$script"
             chmod 755 "/opt/chuma/agent/$script"
           done
@@ -61,6 +61,7 @@ jobs:
           bash infra/test-chuma-workspace.sh
           bash infra/test-chuma-interaction-core.sh
           bash infra/test-chuma-goal-decision-recovery-core.sh
+          bash infra/test-chuma-intelligence.sh
           test -f infra/chuma-control.service
           test -f infra/chuma-control.timer
           test -f infra/chuma-release.sh
@@ -70,6 +71,8 @@ jobs:
           grep -q 'chuma-release.sh' infra/agent-install.sh
           grep -q 'chuma-workspace.sh' infra/agent-install.sh
           grep -q 'workspace)' infra/chuma-control.sh
+          grep -q 'intelligence)' infra/chuma-control.sh
+          grep -q 'chuma-intelligence.sh' infra/agent-install.sh
           grep -q 'app.health=ok' infra/chuma-control.sh
           grep -q 'systemctl enable --now chuma-backup.timer chuma-control.timer' infra/agent-install.sh
           grep -q 'sha256sum "\$FILE" > "\$FILE.sha256"' infra/backup.sh
