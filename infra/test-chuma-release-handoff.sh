@@ -7,6 +7,15 @@ trap cleanup EXIT
 
 APP_ROOT="$ROOT/app"
 mkdir -p "$APP_ROOT/agent" "$APP_ROOT/infra" "$ROOT/work/release"
+if ! command -v flock >/dev/null 2>&1; then
+  mkdir -p "$ROOT/bin"
+  cat > "$ROOT/bin/flock" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+  chmod 0755 "$ROOT/bin/flock"
+  export PATH="$ROOT/bin:$PATH"
+fi
 cp infra/chuma-release.sh "$APP_ROOT/agent/chuma-release.sh"
 chmod 0755 "$APP_ROOT/agent/chuma-release.sh"
 
