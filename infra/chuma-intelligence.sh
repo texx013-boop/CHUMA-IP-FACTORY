@@ -158,7 +158,8 @@ events() {
 }
 
 checkpoint() {
-  local p="$1" stage="$2" result="$3" f="$RECOVERY_ROOT/${p}.checkpoint"
+  local p="$1" stage="$2" result="$3" f
+  f="$RECOVERY_ROOT/${p}.checkpoint"
   valid_project "$p" && safe_value "$stage" && safe_value "$result" || {
     echo "invalid checkpoint values" >&2
     return 64
