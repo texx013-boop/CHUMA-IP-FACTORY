@@ -10,6 +10,8 @@ REPO="${CHUMA_UPDATE_REPO:-git@github.com:texx013-boop/CHUMA-IP-FACTORY.git}"
 BRANCH="${CHUMA_UPDATE_BRANCH:-main}"
 INTERVAL="${CHUMA_UPDATE_INTERVAL:-60}"
 AUTO_UPDATE="${CHUMA_AUTO_UPDATE:-true}"
+# GitHub CI is advisory by default; set true for a strict release gate.
+REQUIRE_CI_GREEN="${CHUMA_REQUIRE_CI_GREEN:-false}"
 GITHUB_KEY="${GITHUB_DEPLOY_KEY:-$STATE_DIR/github_deploy_ed25519}"
 KNOWN_HOSTS="${GITHUB_KNOWN_HOSTS:-$STATE_DIR/github_known_hosts}"
 LOCK_FILE="${STATE_DIR}/update.lock"
@@ -182,10 +184,14 @@ while true; do
   if [[ "$SHA" == "$CURRENT_SHA" ]]; then sleep "$INTERVAL"; continue; fi
 
   log "new revision detected: $SHA"
-  if ! ci_green "$SHA"; then
-    log "update blocked: required GitHub validation is not green for $SHA"
-    sleep "$INTERVAL"
-    continue
+  if [[ "$REQUIRE_CI_GREEN" == "true" ]]; then
+    if ! ci_green "$SHA"; then
+      log "update blocked by explicit CI policy: required GitHub validation is not green for $SHA"
+      sleep "$INTERVAL"
+      continue
+    fi
+  else
+    log "GitHub CI is advisory; proceeding with server-side release verification for $SHA"
   fi
   if [[ ! -f "$ENV_FILE" ]]; then
     log "update blocked: deployment environment file is missing"
