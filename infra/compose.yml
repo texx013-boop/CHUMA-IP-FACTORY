@@ -16,6 +16,7 @@ services:
       CHUMA_UPSTREAM: app:8097
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - /opt/chuma/control:/opt/chuma/control:ro
       - caddy_data:/data
       - caddy_config:/config
     networks:
