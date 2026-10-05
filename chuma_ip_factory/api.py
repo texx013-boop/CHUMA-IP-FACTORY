@@ -10,6 +10,10 @@ class API(BaseHTTPRequestHandler):
     factory=None
     budget_policy=BudgetPolicy()
     admin_token=os.getenv("CHUMA_ADMIN_TOKEN", "").strip()
+    auth_failures={}
+    auth_lock=threading.Lock()
+    auth_window_seconds=60
+    auth_failure_limit=10
 
     def authorized(self):
         if not self.admin_token:
@@ -21,6 +25,21 @@ class API(BaseHTTPRequestHandler):
     def require_auth(self):
         if self.authorized():
             return True
+        key=self.client_address[0] if self.client_address else "unknown"
+        now=time.monotonic()
+        with self.auth_lock:
+            bucket=self.auth_failures.get(key)
+            if bucket is None or now-bucket[0] >= self.auth_window_seconds:
+                bucket=[now,0]
+                self.auth_failures[key]=bucket
+            bucket[1]+=1
+            failures=bucket[1]
+            if len(self.auth_failures)>4096:
+                cutoff=now-self.auth_window_seconds
+                self.auth_failures={k:v for k,v in self.auth_failures.items() if v[0]>=cutoff}
+        if failures > self.auth_failure_limit:
+            self.sendj(429,{"error":"auth_rate_limited","message":"too many authentication failures"}, extra={"Retry-After":str(self.auth_window_seconds)})
+            return False
         self.sendj(401,{"error":"unauthorized","message":"valid Bearer token required"}, extra={"WWW-Authenticate":"Bearer"})
         return False
     def request_owner(self):
