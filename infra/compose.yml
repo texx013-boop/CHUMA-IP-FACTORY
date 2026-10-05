@@ -13,6 +13,7 @@ services:
     environment:
       CHUMA_DOMAIN: ${CHUMA_DOMAIN}
       ACME_EMAIL: ${ACME_EMAIL}
+      CHUMA_UPSTREAM: app:8097
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
