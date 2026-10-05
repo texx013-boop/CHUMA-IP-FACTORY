@@ -54,6 +54,18 @@ audit_once() {
     log "security: chuma-auto-update.service is not enabled"
     failures=$((failures+1))
   fi
+  if ! systemctl is-enabled --quiet chuma-watchdog.service; then
+    log "security: chuma-watchdog.service is not enabled"
+    failures=$((failures+1))
+  fi
+  if ! systemctl is-enabled --quiet chuma-security-agent.service; then
+    log "security: chuma-security-agent.service is not enabled"
+    failures=$((failures+1))
+  fi
+  if ! systemctl is-enabled --quiet chuma-backup.timer; then
+    log "security: chuma-backup.timer is not enabled"
+    failures=$((failures+1))
+  fi
 
   date +%s > "$STATE_DIR/security_last_audit"
   chmod 600 "$STATE_DIR/security_last_audit"
