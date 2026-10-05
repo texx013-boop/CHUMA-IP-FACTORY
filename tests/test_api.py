@@ -223,6 +223,26 @@ def test_artifact_download_rejects_tampered_bytes():
         API.factory, API.admin_token = previous_factory, previous_token
         factory.store.close(); d.cleanup()
 
+def test_artifact_download_rejects_path_outside_asset_root():
+    import hashlib
+    d = tempfile.TemporaryDirectory()
+    factory = CHUMA(Path(d.name) / "db.sqlite", Path(d.name) / "media")
+    owner = factory.owner(); cid = factory.create_character(owner, "Path Scope")
+    outside = Path(d.name) / "outside.bin"; outside.write_bytes(b"outside")
+    aid = "ART-PATH"; factory.store.db.execute("INSERT INTO artifacts VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+        (aid, owner, cid, None, None, "test", "application/octet-stream", str(outside), hashlib.sha256(b"outside").hexdigest(), "test", "READY", int(__import__("time").time())))
+    factory.store.commit()
+    previous_factory, previous_token = API.factory, API.admin_token; API.factory, API.admin_token = factory, "secret"
+    server = HTTPServer(("127.0.0.1", 0), API); threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        req = urllib.request.Request(f"http://127.0.0.1:{server.server_port}/artifacts/{aid}", headers={"Authorization":"Bearer secret","X-Owner-ID":owner})
+        try: urllib.request.urlopen(req, timeout=5); assert False, "outside-root artifact was served"
+        except urllib.error.HTTPError as exc:
+            assert exc.code == 403
+            assert json.loads(exc.read().decode())["error"] == "forbidden"
+    finally:
+        server.shutdown(); server.server_close(); API.factory, API.admin_token = previous_factory, previous_token; factory.store.close(); d.cleanup()
+
 def test_artifact_download_enforces_owner_scope():
     import hashlib
     d = tempfile.TemporaryDirectory()
