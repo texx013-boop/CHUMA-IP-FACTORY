@@ -8,6 +8,13 @@ latest="$(find "$BACKUP_DIR" -type f -name 'chuma-postgres-*.sql.gz' -printf '%T
 [[ -n "$latest" && -s "$latest" ]] || { echo "No usable PostgreSQL backup found." >&2; exit 2; }
 
 gzip -t "$latest"
-sha256sum "$latest" > "$latest.sha256"
+checksum="$latest.sha256"
+if [[ -s "$checksum" ]]; then
+  sha256sum -c "$checksum"
+else
+  sha256sum "$latest" > "$checksum"
+  chmod 600 "$checksum"
+fi
+
 echo "Backup integrity: OK"
 echo "$latest"
