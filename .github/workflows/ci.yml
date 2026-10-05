@@ -39,6 +39,8 @@ jobs:
           grep -q "manifest checksum verification failed" infra/chuma-release.sh
           grep -q "path traversal in bundle" infra/chuma-release.sh
           grep -q "secret-like file in bundle" infra/chuma-release.sh
+          grep -q "links are not allowed in bundle" infra/chuma-release.sh
+          grep -q "unexpected path in bundle" infra/chuma-release.sh
           ! grep -q 'source "$tmp/manifest.env"' infra/chuma-release.sh
           sh -n infra/backup.sh
           mkdir -p /opt/chuma/agent
