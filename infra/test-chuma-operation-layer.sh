@@ -6,8 +6,8 @@ TASK="$ROOT/chuma-task-language.sh"
 bash -n "$REG" "$TASK"
 for p in SHUMA_SPACE FILM_COMBAIN PERSONAL_AI_COMPANION; do
   for o in STATUS VERIFY RESUME SET_TASK STOP; do
-    "$REG" validate "$p" "$o"
-    meta=$("$REG" meta "$p" "$o")
+    bash "$REG" validate "$p" "$o"
+    meta=$(bash "$REG" meta "$p" "$o")
     grep -q '^executor=executors/' <<<"$meta"
     grep -q '^verification=' <<<"$meta"
   done
