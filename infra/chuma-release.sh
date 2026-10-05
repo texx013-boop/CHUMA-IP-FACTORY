@@ -55,7 +55,7 @@ verify_bundle() {
   while IFS= read -r entry; do
     [[ -z "$entry" ]] && continue
     [[ "$entry" != /* && "$entry" != *../* && "$entry" != ../* ]] || die "path traversal in bundle"
-    [[ "$entry" == "manifest.env" || "$entry" == "manifest.sha256" || "$entry" == release/* ]] || die "unexpected path in bundle"
+    [[ "$entry" == "manifest.env" || "$entry" == "manifest.sha256" || "$entry" == "release/" || "$entry" == release/* ]] || die "unexpected path in bundle"
     if [[ "$entry" != "manifest.env" && "$entry" != "manifest.sha256" ]]; then
       [[ "$entry" != *".env"* && "$entry" != *.pem && "$entry" != *.key && "$entry" != *.p12 && "$entry" != *.pfx ]] || die "secret-like file in bundle"
     fi
