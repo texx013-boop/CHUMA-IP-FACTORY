@@ -116,25 +116,27 @@ while true; do
   fi
 
   if [[ "$deployed_ok" -eq 1 ]]; then
-    "$RELEASE_DIR/infra/agent-install.sh" >/dev/null 2>&1 || log "agent refresh failed"
+    if ! "$RELEASE_DIR/infra/agent-install.sh" >/dev/null 2>&1; then
+      log "agent refresh failed; deployment is not accepted"
+      deployed_ok=0
+    fi
+  fi
+
+  if [[ "$deployed_ok" -eq 1 ]]; then
     printf '%s\n' "$SHA" > "$STATE_DIR/deployed_sha"
     chmod 600 "$STATE_DIR/deployed_sha"
     rm -rf "$PREVIOUS_DIR"
     log "deployment successful: $SHA"
   else
     log "deployment failed; restoring previous release"
-    compose "$RELEASE_DIR/infra/.env" "$RELEASE_DIR/infra/compose.yml" down >/dev/null 2>&1 || true
+    compose "$RELEASE_DIR/infra/compose.yml" "$RELEASE_DIR/infra/compose.yml" down >/dev/null 2>&1 || true
     rm -rf "$RELEASE_DIR"
     if [[ -d "$PREVIOUS_DIR" ]]; then
       mv "$PREVIOUS_DIR" "$RELEASE_DIR"
-      if compose "$RELEASE_DIR/infra/.env" "$RELEASE_DIR/infra/compose.yml" up -d --build >/dev/null 2>&1; then
-        if "$RELEASE_DIR/infra/agent-verify.sh" >/dev/null 2>&1; then
-          log "previous release restored and healthy"
-        else
-          log "previous release restore health check failed"
-        fi
+      if "$RELEASE_DIR/infra/agent-install.sh" >/dev/null 2>&1 &&          compose "$RELEASE_DIR/infra/.env" "$RELEASE_DIR/infra/compose.yml" up -d --build >/dev/null 2>&1 &&          "$RELEASE_DIR/infra/agent-verify.sh" >/dev/null 2>&1; then
+        log "previous release restored and healthy"
       else
-        log "previous release restore failed"
+        log "previous release restore failed or health check failed"
       fi
     else
       log "no previous release available; manual recovery may be required"
