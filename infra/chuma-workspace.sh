@@ -207,6 +207,18 @@ set_task() {
   record "$project" task_queued "ok"
   printf 'workspace.task=queued\nproject=%s\n' "$project"
 }
+stop() {
+  local project="$1" file
+  ensure_state "$project"
+  file="$(state_file "$project")"
+  expire_lock_if_needed "$project"
+  if [[ -d "$(lock_dir "$project")" ]]; then rm -rf -- "$(lock_dir "$project")"; fi
+  sed -i 's/^workspace_lock=.*/workspace_lock=none/; s/^workspace_session=.*/workspace_session=/; s/^workspace_lease_expires=.*/workspace_lease_expires=/; s/^task_status=.*/task_status=stopped/; s/^updated_at=.*/updated_at='"$(date -Is)"'/' "$file"
+  record "$project" stop "ok"
+  printf 'workspace.stop=ok
+'
+}
+
 history() {
   local project="$1" file
   ensure_state "$project"
