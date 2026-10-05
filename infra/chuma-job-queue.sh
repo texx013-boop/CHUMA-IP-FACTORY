@@ -40,7 +40,7 @@ set_status(){
  local id="$1" st="$2" result="${3:-}" error="${4:-}" f="$JOBS/$1.env"
  [[ -f "$f" ]] || { echo job_not_found >&2; return 44; }
  [[ "$st" =~ ^(QUEUED|DISPATCHED|RUNNING|VERIFYING|SUCCEEDED|FAILED|RETRYING|BLOCKED|CANCELLED)$ ]] || { echo invalid_status >&2; return 64; }
- sed -i "s/^status=.*/status=$st/; s/^updated_at=.*/updated_at=$(date -Is)/; s/^stage=.*/stage=$st/; s/^result=.*/result=$result/; s/^error=.*/error=$error/" "$f"
+ sed -i "s/^status=.*/status=$st/; s/^task_status=.*/task_status=$(printf "%s" "$st" | tr "[:upper:]" "[:lower:]")/; s/^updated_at=.*/updated_at=$(date -Is)/; s/^stage=.*/stage=$st/; s/^result=.*/result=$result/; s/^error=.*/error=$error/" "$f"
  emit "$id" "STATUS_$st" "result=$result error=$error"; cat "$f"
 }
 get(){ [[ -f "$JOBS/$1.env" ]] || return 44; cat "$JOBS/$1.env"; }
