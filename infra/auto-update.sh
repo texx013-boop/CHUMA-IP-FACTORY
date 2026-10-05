@@ -194,8 +194,12 @@ while true; do
   fi
 
   mkdir -p "$TMP/source"
-  if ! git -C "$TMP/repo" archive "$SHA" | tar -x -C "$TMP/source"; then
+  if ! git -C "$TMP/repo" archive "$SHA" -o "$TMP/release.tar"; then
     log "release archive creation failed"
+    trap - EXIT; cleanup; sleep "$INTERVAL"; continue
+  fi
+  if ! tar -xf "$TMP/release.tar" -C "$TMP/source"; then
+    log "release archive extraction failed"
     trap - EXIT; cleanup; sleep "$INTERVAL"; continue
   fi
 
