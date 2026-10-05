@@ -48,6 +48,15 @@ jobs:
             touch "/opt/chuma/agent/$script"
             chmod 755 "/opt/chuma/agent/$script"
           done
+          for script in chuma-job-dispatcher.sh chuma-job-queue.sh chuma-capability-firewall.sh chuma-server-registry.sh chuma-task-language.sh chuma-operation-registry.sh chuma-owner-identity.sh chuma-approval-gate.sh; do
+            touch "/opt/chuma/agent/$script"
+            chmod 755 "/opt/chuma/agent/$script"
+          done
+          mkdir -p /opt/chuma/agent/executors
+          for executor in SHUMA_SPACE FILM_COMBAIN PERSONAL_AI_COMPANION; do
+            touch "/opt/chuma/agent/executors/$executor.sh"
+            chmod 755 "/opt/chuma/agent/executors/$executor.sh"
+          done
           mkdir -p /opt/chuma/infra
           touch /opt/chuma/infra/backup.sh
           chmod 755 /opt/chuma/infra/backup.sh
