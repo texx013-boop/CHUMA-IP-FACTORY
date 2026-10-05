@@ -79,9 +79,12 @@ class API(BaseHTTPRequestHandler):
 <section class="card" style="margin-top:15px"><div class="head"><h2>История</h2><button onclick="historyLoad()">Обновить</button></div><pre id="history">Выбери проект.</pre></section>
 </main><div id="toast" class="toast"></div>
 <script>
-const $=id=>document.getElementById(id);let token=localStorage.getItem('chuma_token')||'';let data=[];
-function headers(){return {'Content-Type':'application/json','Authorization':'Bearer '+token}}
-async function api(path,opt={}){if(!token){token=prompt('Токен доступа CHUMA:')||'';localStorage.setItem('chuma_token',token)}let r=await fetch('/control/api'+path,Object.assign({headers:headers()},opt));let x=await r.json();if(r.status===401){localStorage.removeItem('chuma_token');token='';throw Error('Требуется токен доступа CHUMA')}if(!r.ok)throw Error(x.error||x.message||'Ошибка');return x}
+const $=id=>document.getElementById(id);let data=[];
+function headers(){return {'Content-Type':'application/json'}}
+async function api(path,opt={}){let r=await fetch('/control/api'+path,Object.assign({credentials:'include',headers:headers()},opt));let x=await r.json().catch(()=>({}));if(r.status===401)throw Error('Требуется сопряжение владельца');if(!r.ok)throw Error(x.error||x.message||'Ошибка');return x}
+async function auth(){try{let x=await api('/auth/status');if(!x.authenticated){showPair()}else{hidePair();refresh()}}catch(e){showPair()}}
+function showPair(){let code=prompt('Одноразовый код сопряжения CHUMA:');if(code){fetch('/control/api/pair',{headers:{'X-CHUMA-Pairing-Code':code},credentials:'include'}).then(r=>{if(!r.ok)throw Error();hidePair();refresh()}).catch(()=>alert('Код сопряжения недействителен'))}}
+function hidePair(){}
 function toast(s){$('toast').textContent=s;$('toast').style.display='block';setTimeout(()=>$('toast').style.display='none',2600)}
 async function refresh(){try{let [s,p]=await Promise.all([api('/status'),api('/projects')]);data=p.projects||[];$('server').innerHTML='<span class="good">● ONLINE</span>';let h=s.health?.status||'—',r=s.ready?.status||'—';$('serverBox').innerHTML='<div class="kv"><span>Приложение</span><b>'+h+'</b><span>Готовность</span><b>'+r+'</b><span>Safe Mode</span><b>'+(s.safe_mode?'ON':'OFF')+'</b><span>Сервисы</span><b>'+Object.entries(s.services||{}).filter(x=>x[1]==='ok').length+'/'+Object.keys(s.services||{}).length+' OK</b></div><details><summary>Контейнеры</summary><pre>'+JSON.stringify(s.containers||[],null,2)+'</pre></details>';renderProjects();renderSelected()}catch(e){$('server').innerHTML='<span class="bad">● ERROR</span>';$('serverBox').textContent=e.message}}
 function renderProjects(){if(!data.length){$('projects').textContent='Нет данных';return}$('projects').innerHTML=data.map(x=>{let s=x.state||{};return '<div class="project"><div class="project-title">'+x.project_id+'</div><div class="kv"><span>Статус</span><b>'+esc(s.status||'—')+'</b><span>Задача</span><b>'+esc(s.current_task||'—')+'</b><span>Task</span><b>'+esc(s.task_status||'idle')+'</b><span>Последний результат</span><b>'+esc(s.last_verified_result||'—')+'</b><span>Следующее действие</span><b>'+esc(s.next_action||'—')+'</b><span>Сессия</span><b>'+esc(s.workspace_session||'—')+'</b></div><div class="actions"><button onclick="pick(\''+x.project_id+'\')">Выбрать</button><button onclick="doProject(\''+x.project_id+'\',\'resume\')">Продолжить</button><button class="danger" onclick="doProject(\''+x.project_id+'\',\'stop\')">Стоп</button></div></div>'}).join('')}
@@ -95,7 +98,7 @@ async function resume(){await intent('resume','')}
 async function stopProject(){await intent('stop','')}
 async function doProject(p,i){$('project').value=p;await intent(i,'')}
 async function safeMode(mode){try{let x=await api('/intent',{method:'POST',headers:headers(),body:JSON.stringify({project:'CONTROL',intent:'safe-mode-'+mode,session:'web-control'})});toast(x.ok?'Safe Mode: '+mode:x.error);await refresh()}catch(e){toast(e.message)}}
-refresh();setInterval(refresh,10000)
+auth();setInterval(()=>auth(),30000)
 </script></body></html>"""
         b=html.encode('utf-8'); self.send_response(200); self.send_header('Content-Type','text/html; charset=utf-8'); self.send_header('Cache-Control','no-store, no-cache, must-revalidate, max-age=0'); self.send_header('Pragma','no-cache'); self.send_header('Expires','0'); self.send_header('Content-Length',str(len(b))); self.end_headers(); self.wfile.write(b)
 
