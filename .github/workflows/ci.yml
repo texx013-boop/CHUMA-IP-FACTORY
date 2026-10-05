@@ -84,7 +84,6 @@ jobs:
           grep -q 'git -C "\$TMP/repo" archive "\$SHA"' infra/auto-update.sh
           grep -q 'agent refresh failed; deployment is not accepted' infra/auto-update.sh
           grep -q 'process_handoff()' infra/auto-update.sh
-          bash -x infra/test-chuma-release-handoff.sh
           grep -q 'local release handoff detected' infra/auto-update.sh
           grep -q 'local release deployment successful' infra/auto-update.sh
           grep -q 'previous release restored after local handoff failure' infra/auto-update.sh
@@ -95,6 +94,9 @@ jobs:
           for pattern in 'reverse_proxy' 'request_body' 'max_size 32MB' 'X-Content-Type-Options' 'X-Frame-Options' 'CHUMA_UPSTREAM'; do
             grep -Fq "$pattern" infra/Caddyfile || { echo "Caddyfile contract missing: $pattern"; exit 1; }
           done
+      - name: Release handoff integration test
+        run: bash -x infra/test-chuma-release-handoff.sh
+
       - name: Docker build security check
         run: |
           test -f infra/.gitignore
