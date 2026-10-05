@@ -44,6 +44,9 @@ run_job(){
  if (( rc != 0 )); then
    "$QUEUE" set-status "$id" FAILED "" "executor_exit=$rc" >/dev/null || true
    "$INTEL" event "$project" job_failed "job=$id rc=$rc" >/dev/null || true
+   if "$QUEUE" retry "$id" >/dev/null 2>&1; then
+     "$INTEL" event "$project" job_retrying "job=$id" >/dev/null || true
+   fi
    return
  fi
  "$INTEL" checkpoint "$project" "job=$id" "executor_completed" >/dev/null || true
