@@ -182,7 +182,7 @@ while true; do
   cleanup() { rm -rf "$TMP"; }
   trap cleanup EXIT
 
-  if ! "${git_env[@]}" git clone --quiet --filter=blob:none --no-checkout --depth 1 --branch "$BRANCH" "$REPO" "$TMP/repo"; then
+  if ! "${git_env[@]}" git clone --quiet --depth 1 --branch "$BRANCH" "$REPO" "$TMP/repo"; then
     log "private repository access failed"
     trap - EXIT; cleanup; sleep "$INTERVAL"; continue
   fi
