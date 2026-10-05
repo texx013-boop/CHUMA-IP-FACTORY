@@ -28,8 +28,8 @@ Usage:
 EOF
 }
 
-valid_project() { [[ "$1" =~ ^[A-Za-z0-9._-]+$ ]]; }
-valid_session() { [[ "$1" =~ ^[A-Za-z0-9._:-]{8,128}$ ]]; }
+valid_project() { [[ "${1:-}" =~ ^[A-Za-z0-9._-]+$ ]]; }
+valid_session() { [[ "${1:-}" =~ ^[A-Za-z0-9._:-]{8,128}$ ]]; }
 
 state_file() {
   local project="$1"
@@ -73,8 +73,7 @@ EOF
 
 record() {
   local project="$1" action="$2" result="$3" session="${4:-}"
-  printf '%s action=%s result=%s session=%s
-' "$(date -Is)" "$action" "$result" "$session" >> "$(history_file "$project")"
+  printf '%s action=%s result=%s session=%s\n' "$(date -Is)" "$action" "$result" "$session" >> "$(history_file "$project")"
   chmod 600 "$(history_file "$project")"
 }
 
@@ -109,9 +108,7 @@ status() {
   expire_lock_if_needed "$project"
   file="$(state_file "$project")"
   cat "$file"
-  if [[ -f "$SAFE_MODE_FILE" ]]; then printf 'safe_mode=on
-'; else printf 'safe_mode=off
-'; fi
+  if [[ -f "$SAFE_MODE_FILE" ]]; then printf 'safe_mode=on\n'; else printf 'safe_mode=off\n'; fi
 }
 
 resume() {
@@ -119,8 +116,7 @@ resume() {
   ensure_state "$project"
   expire_lock_if_needed "$project"
   record "$project" resume "ok"
-  printf 'workspace.resume=ok
-'
+  printf 'workspace.resume=ok\n'
   cat "$(state_file "$project")"
 }
 
@@ -144,20 +140,13 @@ lock() {
   fi
   chmod 700 "$dir"
   now="$(date +%s)"; expires=$((now + lease))
-  printf '%s
-' "$session" > "$dir/session"
-  printf '%s
-' "$expires" > "$dir/expires"
-  printf '%s
-' "$(date -Is)" > "$dir/acquired_at"
+  printf '%s\n' "$session" > "$dir/session"
+  printf '%s\n' "$expires" > "$dir/expires"
+  printf '%s\n' "$(date -Is)" > "$dir/acquired_at"
   chmod 600 "$dir"/*
   sed -i "s/^workspace_lock=.*/workspace_lock=held/; s/^workspace_session=.*/workspace_session=$session/; s/^workspace_lease_expires=.*/workspace_lease_expires=$expires/; s/^updated_at=.*/updated_at=$(date -Is)/" "$(state_file "$project")"
   record "$project" lock "ok" "$session"
-  printf 'workspace.lock=ok
-project=%s
-session=%s
-lease_expires=%s
-' "$project" "$session" "$expires"
+  printf 'workspace.lock=ok\nproject=%s\nsession=%s\nlease_expires=%s\n' "$project" "$session" "$expires"
 }
 
 release() {
@@ -167,24 +156,21 @@ release() {
   dir="$(lock_dir "$project")"
   if [[ ! -d "$dir" ]]; then
     clear_lock_state "$project"; record "$project" release "noop" "$session"
-    printf 'workspace.release=ok
-'; return 0
+    printf 'workspace.release=ok\n'; return 0
   fi
   owner="$(read_lock_value "$project" session)"
   [[ "$owner" == "$session" ]] || { echo "workspace.lock=owner_mismatch" >&2; record "$project" release "denied_owner" "$session"; return 77; }
   rm -rf -- "$dir"
   clear_lock_state "$project"
   record "$project" release "ok" "$session"
-  printf 'workspace.release=ok
-'
+  printf 'workspace.release=ok\n'
 }
 
 open_workspace() {
   local project="$1" session="$2"
   resume "$project" >/dev/null
   lock "$project" "$session"
-  printf 'workspace.open=ok
-'
+  printf 'workspace.open=ok\n'
 }
 
 set_task() {
@@ -207,102 +193,6 @@ set_task() {
   record "$project" task_queued "ok"
   printf 'workspace.task=queued\nproject=%s\n' "$project"
 }
-stop() {
-  local project="$1" file
-  ensure_state "$project"
-  file="$(state_file "$project")"
-  expire_lock_if_needed "$project"
-  if [[ -d "$(lock_dir "$project")" ]]; then rm -rf -- "$(lock_dir "$project")"; fi
-  sed -i 's/^workspace_lock=.*/workspace_lock=none/; s/^workspace_session=.*/workspace_session=/; s/^workspace_lease_expires=.*/workspace_lease_expires=/; s/^task_status=.*/task_status=stopped/; s/^updated_at=.*/updated_at='"$(date -Is)"'/' "$file"
-  record "$project" stop "ok"
-  printf 'workspace.stop=ok
-'
-}
-
-history() {
-  local project="$1" file
-  ensure_state "$project"
-  file="$(history_file "$project")"
-  if [[ -f "$file" ]]; then cat "$file"; else printf 'history=empty
-'; fi
-}
-
-safe_mode() {
-  case "$1" in
-    on) umask 077; printf '%s\n' "$(date -Is)" > "$SAFE_MODE_FILE"; chmod 600 "$SAFE_MODE_FILE"; printf 'safe_mode=on\n' ;;
-    off) rm -f -- "$SAFE_MODE_FILE"; printf 'safe_mode=off\n' ;;
-    status) [[ -f "$SAFE_MODE_FILE" ]] && printf 'safe_mode=on\n' || printf 'safe_mode=off\n' ;;
-    *) echo "Usage: safe-mode <on|off|status>" >&2; return 64 ;;
-  esac
-}
-
-case "${1:-}" in
-  status|resume|history)
-    [[ $# -eq 2 ]] || { usage >&2; exit 64; }; "$1" "$2" ;;
-  open)
-    [[ $# -eq 3 ]] || { usage >&2; exit 64; }; open_workspace "$2" "$3" ;;
-  lock)
-    [[ $# -ge 3 && $# -le 4 ]] || { usage >&2; exit 64; }; lock "$2" "$3" "${4:-$DEFAULT_LEASE_SECONDS}" ;;
-  release)
-    [[ $# -eq 3 ]] || { usage >&2; exit 64; }; release "$2" "$3" ;;
-  stop)
-    [[ $# -eq 2 ]] || { usage >&2; exit 64; }; stop "$2" ;;
-  safe-mode)
-    [[ $# -eq 2 ]] || { usage >&2; exit 64; }; safe_mode "$2" ;;
-  *) usage >&2; exit 64 ;;
-esac
-\n'* && "$task" != *
-  local project="$1" file
-  ensure_state "$project"
-  file="$(state_file "$project")"
-  expire_lock_if_needed "$project"
-  if [[ -d "$(lock_dir "$project")" ]]; then rm -rf -- "$(lock_dir "$project")"; fi
-  sed -i 's/^workspace_lock=.*/workspace_lock=none/; s/^workspace_session=.*/workspace_session=/; s/^workspace_lease_expires=.*/workspace_lease_expires=/; s/^task_status=.*/task_status=stopped/; s/^updated_at=.*/updated_at='"$(date -Is)"'/' "$file"
-  record "$project" stop "ok"
-  printf 'workspace.stop=ok
-'
-}
-
-history() {
-  local project="$1" file
-  ensure_state "$project"
-  file="$(history_file "$project")"
-  if [[ -f "$file" ]]; then cat "$file"; else printf 'history=empty
-'; fi
-}
-
-safe_mode() {
-  case "$1" in
-    on) umask 077; printf '%s\n' "$(date -Is)" > "$SAFE_MODE_FILE"; chmod 600 "$SAFE_MODE_FILE"; printf 'safe_mode=on\n' ;;
-    off) rm -f -- "$SAFE_MODE_FILE"; printf 'safe_mode=off\n' ;;
-    status) [[ -f "$SAFE_MODE_FILE" ]] && printf 'safe_mode=on\n' || printf 'safe_mode=off\n' ;;
-    *) echo "Usage: safe-mode <on|off|status>" >&2; return 64 ;;
-  esac
-}
-
-case "${1:-}" in
-  status|resume|history)
-    [[ $# -eq 2 ]] || { usage >&2; exit 64; }; "$1" "$2" ;;
-  open)
-    [[ $# -eq 3 ]] || { usage >&2; exit 64; }; open_workspace "$2" "$3" ;;
-  lock)
-    [[ $# -ge 3 && $# -le 4 ]] || { usage >&2; exit 64; }; lock "$2" "$3" "${4:-$DEFAULT_LEASE_SECONDS}" ;;
-  release)
-    [[ $# -eq 3 ]] || { usage >&2; exit 64; }; release "$2" "$3" ;;
-  stop)
-    [[ $# -eq 2 ]] || { usage >&2; exit 64; }; stop "$2" ;;
-  safe-mode)
-    [[ $# -eq 2 ]] || { usage >&2; exit 64; }; safe_mode "$2" ;;
-  *) usage >&2; exit 64 ;;
-esac
-\r'* && ${#task} -le 2000 ]] || { echo "invalid task" >&2; return 64; }
-  file="$(state_file "$project")"
-  sed -i \
-    "s/^current_task=.*/current_task=$task/; s/^task_status=.*/task_status=queued/; s/^next_action=.*/next_action=execute_task/; s/^updated_at=.*/updated_at=$(date -Is)/" \
-    "$file"
-  record "$project" task_queued "ok"
-  printf 'workspace.task=queued\nproject=%s\n' "$project"
-}
 
 stop() {
   local project="$1" file
@@ -310,18 +200,16 @@ stop() {
   file="$(state_file "$project")"
   expire_lock_if_needed "$project"
   if [[ -d "$(lock_dir "$project")" ]]; then rm -rf -- "$(lock_dir "$project")"; fi
-  sed -i 's/^workspace_lock=.*/workspace_lock=none/; s/^workspace_session=.*/workspace_session=/; s/^workspace_lease_expires=.*/workspace_lease_expires=/; s/^task_status=.*/task_status=stopped/; s/^updated_at=.*/updated_at='"$(date -Is)"'/' "$file"
+  sed -i 's/^workspace_lock=.*/workspace_lock=none/; s/^workspace_session=.*/workspace_session=/; s/^workspace_lease_expires=.*/workspace_lease_expires=/; s/^task_status=.*/task_status=stopped/; s/^updated_at=.*/updated_at='"\$(date -Is)"'/' "$file"
   record "$project" stop "ok"
-  printf 'workspace.stop=ok
-'
+  printf 'workspace.stop=ok\n'
 }
 
 history() {
   local project="$1" file
   ensure_state "$project"
   file="$(history_file "$project")"
-  if [[ -f "$file" ]]; then cat "$file"; else printf 'history=empty
-'; fi
+  if [[ -f "$file" ]]; then cat "$file"; else printf 'history=empty\n'; fi
 }
 
 safe_mode() {
@@ -342,6 +230,8 @@ case "${1:-}" in
     [[ $# -ge 3 && $# -le 4 ]] || { usage >&2; exit 64; }; lock "$2" "$3" "${4:-$DEFAULT_LEASE_SECONDS}" ;;
   release)
     [[ $# -eq 3 ]] || { usage >&2; exit 64; }; release "$2" "$3" ;;
+  set-task)
+    [[ $# -eq 3 ]] || { usage >&2; exit 64; }; set_task "$2" "$3" ;;
   stop)
     [[ $# -eq 2 ]] || { usage >&2; exit 64; }; stop "$2" ;;
   safe-mode)
