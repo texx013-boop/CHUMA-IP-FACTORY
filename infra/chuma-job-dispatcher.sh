@@ -13,9 +13,10 @@ exec 9>"$LOCK"; flock -n 9 || exit 0
 log(){ printf '%s %s\n' "$(date -Is)" "*" >> "$LOG"; }
 getv(){ sed -n "s/^$2=//p" "$1"; }
 run_job(){
- local id="$1" f="$ROOT/state/jobs/$id.env" project task mode risk
+ local id="$1" f="$ROOT/state/jobs/$id.env" project task mode risk started now timeout_at
  [[ -f "$f" ]] || return 44
  project="$(getv "$f" project)"; task="$(getv "$f" task)"; mode="$(getv "$f" autonomy_mode)"; risk="$(getv "$f" risk_ceiling)"
+ started="$(date +%s)"; timeout_at=$((started+1900))
  "$QUEUE" set-status "$id" DISPATCHED >/dev/null || return
  if ! "$FIREWALL" check "$mode" "$risk" >/dev/null 2>&1; then
    "$QUEUE" set-status "$id" BLOCKED "" capability_denied >/dev/null || true
@@ -53,7 +54,28 @@ run_job(){
  "$QUEUE" set-status "$id" SUCCEEDED "$output" "" >/dev/null || true
  "$INTEL" event "$project" job_succeeded "job=$id" >/dev/null || true
 }
+
+recover_stale(){
+ local now f st updated epoch id attempts
+ now=$(date +%s)
+ for f in "$ROOT/state/jobs"/JOB-*.env; do
+  [[ -f "$f" ]] || continue
+  st="$(getv "$f" status)"; id="$(getv "$f" job_id")"
+  [[ "$st" == RUNNING || "$st" == VERIFYING || "$st" == DISPATCHED ]] || continue
+  updated="$(getv "$f" updated_at")"
+  epoch=$(date -d "$updated" +%s 2>/dev/null || echo "$now")
+  if (( now-epoch > 2100 )); then
+   "$QUEUE" set-status "$id" FAILED "" stale_job_timeout >/dev/null || true
+   if "$QUEUE" retry "$id" >/dev/null 2>&1; then
+    "$INTEL" event "$(getv "$f" project)" job_recovered "job=$id action=retry" >/dev/null || true
+   else
+    "$INTEL" event "$(getv "$f" project)" job_blocked "job=$id reason=stale_retry_limit" >/dev/null || true
+   fi
+  fi
+ done
+}
 while true; do
+ recover_stale
  for f in "$ROOT/state/jobs"/JOB-*.env; do
    [[ -f "$f" ]] || continue
    st="$(getv "$f" status)"
