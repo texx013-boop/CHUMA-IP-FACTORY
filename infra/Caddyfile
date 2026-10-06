@@ -1,6 +1,12 @@
 {$CHUMA_DOMAIN} {
     encode gzip
 
+    @dev path /control/dev /control/dev/*
+    handle @dev {
+        uri strip_prefix /control/dev
+        reverse_proxy unix//opt/chuma/control/dev.sock
+    }
+
     @control path /control/api/*
     handle @control {
         uri strip_prefix /control
