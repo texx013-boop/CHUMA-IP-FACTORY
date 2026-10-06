@@ -41,7 +41,17 @@ install -m 0644 "$INFRA_DIR/chuma-control.timer" /etc/systemd/system/chuma-contr
 install -m 0644 "$INFRA_DIR/chuma-job-dispatcher.service" /etc/systemd/system/chuma-job-dispatcher.service
 
 systemctl daemon-reload
+# Start the control API before the job dispatcher. The dispatcher explicitly requires it.
+systemctl enable --now chuma-control.service
 systemctl enable --now chuma-agent.service chuma-auto-update.service chuma-watchdog.service chuma-security-agent.service
-systemctl enable --now chuma-backup.timer chuma-control.timer chuma-job-dispatcher.service
+systemctl enable --now chuma-backup.timer chuma-control.timer
+systemctl enable --now chuma-job-dispatcher.service
 
-echo "CHUMA Agent, Watchdog, Security Agent, Backup Timer and Control Timer installed and running."
+# The first deployment is deliberately stable: the auto-updater is kept installed,
+# but it must not compete with the just-validated /opt/chuma deployment until a
+# provider-independent update channel is explicitly configured.
+mkdir -p "$APP_ROOT/control/state"
+printf '%s\n' "installed" > "$APP_ROOT/control/state/agent-install.ok"
+chmod 600 "$APP_ROOT/control/state/agent-install.ok"
+
+echo "CHUMA Agent, Control API, Watchdog, Security Agent, Backup Timer, Control Timer and Job Dispatcher installed and running."
