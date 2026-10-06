@@ -83,3 +83,16 @@ def test_failed_image_provider_run_is_persisted():
     assert run['provider']=='failing-test-image'
     assert 'simulated_provider_failure' in run['response_json']
     d.cleanup()
+
+
+def test_growth_recommendation_is_evidence_based():
+    d,cx=app(); o=cx.owner(); cid=cx.create_character(o,'Growth')
+    for direction in ('История и личность','Визуальный IP','История и личность'):
+        r=cx.autonomous_cycle(o,cid,idea={'mechanic':'discovery_story','hook':direction,'direction':direction,'brief':direction})
+        assert r['metrics']['is_test_fixture']
+    rec=cx.growth_recommendation(o,cid)
+    assert rec['stage']=='FORMATION'
+    assert rec['recommendation']=='История и личность'
+    assert rec['tested']==3
+    assert 0 < rec['confidence'] <= 1
+    d.cleanup()
