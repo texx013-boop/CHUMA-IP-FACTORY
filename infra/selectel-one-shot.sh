@@ -40,7 +40,7 @@ fi
 
 echo "[4/7] Installing latest CHUMA..."
 rm -rf "$TMP"
-git -c http.connectTimeout=15 -c http.lowSpeedLimit=1024 -c http.lowSpeedTime=30 clone --depth 1 "$REPO" "$TMP"
+git -c http.connectTimeout=15 -c http.lowSpeedLimit=1024 -c http.lowSpeedTime=30 clone --depth 1 --single-branch "$REPO" "$TMP"
 if [[ -d "$ROOT" ]]; then
   PREVIOUS_ROOT="${ROOT}.previous-$(date +%Y%m%d-%H%M%S)"
   mv "$ROOT" "$PREVIOUS_ROOT"
@@ -58,8 +58,8 @@ rm -rf "$TMP"
 echo "[5/7] Bootstrapping server..."
 cd "$ROOT"
 bash infra/bootstrap.sh
-PUBLIC_IP="$(hostname -I | awk '{print $1}')"
-CHUMA_DOMAIN="${PUBLIC_IP}.nip.io"
+PUBLIC_IP="${CHUMA_PUBLIC_IP:-161.104.32.15}"
+CHUMA_DOMAIN=":80"
 sed -i "s#^CHUMA_DOMAIN=.*#CHUMA_DOMAIN=$CHUMA_DOMAIN#" "$ROOT/infra/.env"
 
 echo "[6/7] Building and starting CHUMA..."
