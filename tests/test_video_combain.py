@@ -144,8 +144,8 @@ def test_video_combain_can_build_job_from_latest_ready_image_content():
          now, now),
     )
     factory.store.db.execute(
-        "INSERT INTO assets VALUES(?,?,?,?,?,?,?,?)",
-        (asset_id, owner, character_id, "TARGETED", "APPROVED", "{}", digest, now),
+        "INSERT INTO assets VALUES(?,?,?,?,?,?,?,?,?)",
+        (asset_id, owner, character_id, "TARGETED", "APPROVED", "{}", digest, digest, now),
     )
     factory.store.db.execute(
         "INSERT INTO artifacts VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
