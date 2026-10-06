@@ -64,14 +64,8 @@ fi
 chmod 600 "$GITHUB_KEY"
 chmod 644 "${GITHUB_KEY}.pub"
 
-# Pin GitHub's SSH host key once so the updater does not trust arbitrary hosts.
-GITHUB_KNOWN_HOSTS="$APP_ROOT/agent/github_known_hosts"
-if [[ ! -s "$GITHUB_KNOWN_HOSTS" ]]; then
-  umask 077
-  ssh-keyscan -H github.com > "$GITHUB_KNOWN_HOSTS" 2>/dev/null
-  test -s "$GITHUB_KNOWN_HOSTS"
-  chmod 600 "$GITHUB_KNOWN_HOSTS"
-fi
+# GitHub SSH is optional for the current deployment path.
+# Do not block first boot on ssh-keyscan/network access to GitHub.
 
 if [[ ! -f "$APP_ROOT/infra/.env" ]]; then
   umask 077
@@ -104,6 +98,6 @@ ufw --force enable >/dev/null
 
 echo "[bootstrap] OK"
 echo "[bootstrap] CHUMA Control plane: $CONTROL_ROOT"
-echo "[bootstrap] GitHub read-only source adapter key: ${GITHUB_KEY}.pub"
+echo "[bootstrap] GitHub read-only source adapter prepared: ${GITHUB_KEY}.pub"
 echo "[bootstrap] GitHub remains optional as a source adapter during the Control-plane migration."
 cat "${GITHUB_KEY}.pub"
