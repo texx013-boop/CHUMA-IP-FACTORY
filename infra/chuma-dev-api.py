@@ -124,6 +124,9 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         path=self.path.split("?",1)[0]
         if not auth(self.headers): return self.sendj(401,{"error":"unauthorized"})
+        if path=="/":
+            ui=(APP_ROOT/"infra/mini-ip-dev-ui.html").read_bytes()
+            self.send_response(200); self.send_header("Content-Type","text/html; charset=utf-8"); self.send_header("Cache-Control","no-store"); self.send_header("Content-Length",str(len(ui))); self.end_headers(); self.wfile.write(ui); return
         if path=="/api/status":
             if not DEV_ROOT.exists(): init_workspace()
             return self.sendj(200,{"ok":True,"status":status()})
