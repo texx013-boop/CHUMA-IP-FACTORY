@@ -191,7 +191,7 @@ class CHUMA:
         if not row: raise AuthorizationError()
         card=json.loads(row['card_json'] or '{}')
         control=card.setdefault('user_controls',{})
-        for key in ('personality','appearance','style','behavior','signature','voice','creative_direction','dna_notes'):
+        for key in ('personality','appearance','style','behavior','signature','voice','creative_direction','dna_notes','growth_plan'):
             if key in patch and patch[key] is not None: control[key]=patch[key]
         if 'voice' in patch and patch['voice'] is not None:
             voice=patch['voice']
