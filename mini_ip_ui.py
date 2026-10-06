@@ -71,3 +71,15 @@ async function refresh(){try{let h=await fetch('/health').then(r=>r.json()),rr=a
 async function gallery(items){if(!items.length){$('gallery').innerHTML='<span class="muted">Пока нет готовых артефактов.</span>';return}$('gallery').innerHTML='';for(const a of items.slice().reverse()){let d=document.createElement('div');d.className='tile';let img=document.createElement('img');try{let r=await fetch('/artifacts/'+a.artifact_id,{headers:headers()});img.src=URL.createObjectURL(await r.blob())}catch(e){}d.appendChild(img);let m=document.createElement('div');m.textContent=({APPROVED:'ГОТОВО',PENDING:'ОЖИДАЕТ',FAILED:'ОШИБКА'}[a.status]||a.status||'')+' · '+(a.variant==='master'?'основной вариант':(a.variant||'материал'));d.appendChild(m);$('gallery').appendChild(d)}}
 if(growth.direction){$('growth-status').textContent='Текущее направление: '+growth.direction+(growth.discovery?' · обкатка включена':'');if($('growth-brief'))$('growth-brief').value=growth.brief||''} auth();setInterval(refresh,10000);
 </script></html>
+
+# HTTP response adapter used by run.py / API.send_html.
+def send_mini_ip(self):
+    body = MINI_IP_HTML.encode("utf-8")
+    self.send_response(200)
+    self.send_header("Content-Type", "text/html; charset=utf-8")
+    self.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+    self.send_header("Pragma", "no-cache")
+    self.send_header("Expires", "0")
+    self.send_header("Content-Length", str(len(body)))
+    self.end_headers()
+    self.wfile.write(body)
