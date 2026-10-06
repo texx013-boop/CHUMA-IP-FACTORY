@@ -17,6 +17,8 @@ SESSION_FILE=CONTROL_ROOT/"state/control-session"
 SESSION_TTL=30*24*3600
 PAIRING_TTL=10*60
 PAIRING_META_FILE=CONTROL_ROOT/"state/control-pairing-meta"
+SECURE_COOKIE=os.getenv("CHUMA_SECURE_COOKIE","false").strip().lower() in ("1","true","yes","on")
+COOKIE_SECURITY="; Secure" if SECURE_COOKIE else ""
 
 def load_token():
     try:
@@ -206,7 +208,7 @@ class Handler(BaseHTTPRequestHandler):
             self.send_response(200)
             self.send_header("Content-Type","application/json; charset=utf-8")
             self.send_header("Cache-Control","no-store")
-            self.send_header("Set-Cookie",f"chuma_session={session}; Path=/control; Max-Age={SESSION_TTL}; HttpOnly; SameSite=Strict")
+            self.send_header("Set-Cookie",f"chuma_session={session}; Path=/control; Max-Age={SESSION_TTL}; HttpOnly; SameSite=Strict{COOKIE_SECURITY}")
             self.end_headers()
             self.wfile.write(b'{"ok":true}')
             return
