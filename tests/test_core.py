@@ -85,6 +85,23 @@ def test_failed_image_provider_run_is_persisted():
     d.cleanup()
 
 
+def test_reference_upload_is_persisted_and_owned():
+    d,cx=app(); o=cx.owner(); cid=cx.create_character(o,'Reference')
+    data=b'fake-image-bytes'
+    result=cx.attach_reference(o,cid,data,'image/png','reference.png')
+    assert result['character_id']==cid
+    assert result['size_bytes']==len(data)
+    row=cx.store.one('SELECT kind,status,sha256 FROM assets WHERE asset_id=?',(result['asset_id'],))
+    assert row['kind']=='REFERENCE' and row['status']=='APPROVED'
+    assert row['sha256']
+    art=cx.store.one('SELECT variant,status,storage_path FROM artifacts WHERE artifact_id=?',(result['artifact_id'],))
+    assert art['variant']=='reference' and art['status']=='READY'
+    assert pathlib.Path(art['storage_path']).exists()
+    profile=cx.character_profile(o,cid)
+    assert profile['card']['reference_asset_id']==result['asset_id']
+    d.cleanup()
+
+
 def test_growth_recommendation_is_evidence_based():
     d,cx=app(); o=cx.owner(); cid=cx.create_character(o,'Growth')
     for direction in ('История и личность','Визуальный IP','История и личность'):
