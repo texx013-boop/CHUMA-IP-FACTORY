@@ -6,12 +6,14 @@ def test_job_queue_is_idempotent_and_runs():
     d=tempfile.TemporaryDirectory()
     c=CHUMA(pathlib.Path(d.name)/"db.sqlite",pathlib.Path(d.name)/"media")
     o=c.owner(); cid=c.create_character(o,"Queue")
-    a=c.enqueue_job(o,"AUTONOMOUS_CYCLE",{"character_id":cid,"platform":"local-test"},"same-key")
+    a=c.enqueue_job(o,"AUTONOMOUS_CYCLE",{"character_id":cid,"platform":"local-test","idea":{"mechanic":"user_brief","hook":"Кафе в Москве"}},"same-key")
     b=c.enqueue_job(o,"AUTONOMOUS_CYCLE",{"character_id":cid,"platform":"local-test"},"same-key")
     assert a==b
     result=c.run_job(a)
     assert result["status"]=="SUCCEEDED"
     assert c.store.one("SELECT COUNT(*) n FROM jobs WHERE owner_id=?",(o,))["n"]==1
+    content=c.store.one("SELECT idea_json FROM content WHERE owner_id=? ORDER BY created_at DESC LIMIT 1",(o,))
+    assert "Кафе в Москве" in content["idea_json"]
     d.cleanup()
 
 def test_job_failure_retries_then_dead_letters():
