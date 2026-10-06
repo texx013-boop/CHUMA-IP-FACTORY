@@ -176,6 +176,6 @@ def main():
     CONTROL_ROOT.mkdir(parents=True,exist_ok=True); BACKUP_ROOT.mkdir(parents=True,exist_ok=True)
     try: SOCKET_PATH.unlink()
     except FileNotFoundError: pass
-    srv=UnixStreamServer(str(SOCKET_PATH),Handler); os.chmod(SOCKET_PATH,0o660); srv.serve_forever()
+    srv=UnixStreamServer(str(SOCKET_PATH),Handler); os.chmod(SOCKET_PATH,0o666); srv.serve_forever()
 
 if __name__=="__main__": main()
