@@ -85,6 +85,16 @@ def test_failed_image_provider_run_is_persisted():
     d.cleanup()
 
 
+def test_growth_plan_and_experiment_direction_persist():
+    d,cx=app(); o=cx.owner(); cid=cx.create_character(o,'Guided')
+    profile=cx.update_character_preferences(o,cid,{'growth_plan':{'direction':'История и личность + Визуальный IP','brief':'Хочу найти сильный образ','mode':'owner-guided'}})
+    assert profile['card']['user_controls']['growth_plan']['direction']=='История и личность + Визуальный IP'
+    r=cx.autonomous_cycle(o,cid,idea={'mechanic':'discovery_visual','hook':'образ','direction':'Визуальный IP','brief':'образ'})
+    row=cx.store.one('SELECT idea_json FROM content WHERE content_id=?',(r['content_id'],))
+    assert 'Визуальный IP' in row['idea_json']
+    d.cleanup()
+
+
 def test_reference_upload_is_persisted_and_owned():
     d,cx=app(); o=cx.owner(); cid=cx.create_character(o,'Reference')
     data=b'fake-image-bytes'
