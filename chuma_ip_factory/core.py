@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 VERSION='2.5.8'
-SCHEMA_VERSION=10
+SCHEMA_VERSION=11
 
 class CHUMAError(Exception): pass
 class AuthorizationError(CHUMAError): pass
@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS meta(k TEXT PRIMARY KEY,v TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS owners(owner_id TEXT PRIMARY KEY,created_at INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS sessions(session_id TEXT PRIMARY KEY,owner_id TEXT NOT NULL,created_at INTEGER NOT NULL,FOREIGN KEY(owner_id) REFERENCES owners(owner_id));
 CREATE TABLE IF NOT EXISTS characters(character_id TEXT PRIMARY KEY,owner_id TEXT NOT NULL,name TEXT NOT NULL,state TEXT NOT NULL,card_json TEXT NOT NULL,genome_json TEXT NOT NULL,content_dna_json TEXT NOT NULL,created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL,version INTEGER NOT NULL,FOREIGN KEY(owner_id) REFERENCES owners(owner_id));
-CREATE TABLE IF NOT EXISTS assets(asset_id TEXT PRIMARY KEY,owner_id TEXT NOT NULL,character_id TEXT NOT NULL,kind TEXT NOT NULL,status TEXT NOT NULL,meta_json TEXT NOT NULL,content_hash TEXT NOT NULL,created_at INTEGER NOT NULL,FOREIGN KEY(character_id) REFERENCES characters(character_id));
+CREATE TABLE IF NOT EXISTS assets(asset_id TEXT PRIMARY KEY,owner_id TEXT NOT NULL,character_id TEXT NOT NULL,kind TEXT NOT NULL,status TEXT NOT NULL,meta_json TEXT NOT NULL,content_hash TEXT NOT NULL,sha256 TEXT,created_at INTEGER NOT NULL,FOREIGN KEY(character_id) REFERENCES characters(character_id));
 CREATE TABLE IF NOT EXISTS content(content_id TEXT PRIMARY KEY,owner_id TEXT NOT NULL,character_id TEXT NOT NULL,idea_json TEXT NOT NULL,status TEXT NOT NULL,production_json TEXT NOT NULL,provenance_json TEXT NOT NULL,created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL,UNIQUE(owner_id,content_id));
 CREATE TABLE IF NOT EXISTS experiments(experiment_id TEXT PRIMARY KEY,owner_id TEXT NOT NULL,character_id TEXT NOT NULL,hypothesis TEXT NOT NULL,target_signal TEXT NOT NULL,status TEXT NOT NULL,result_json TEXT NOT NULL,created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS publications(publication_id TEXT PRIMARY KEY,owner_id TEXT NOT NULL,content_id TEXT NOT NULL,platform TEXT NOT NULL,status TEXT NOT NULL,external_id TEXT,metrics_json TEXT NOT NULL,created_at INTEGER NOT NULL,UNIQUE(owner_id,content_id,platform));
@@ -80,6 +80,14 @@ class Store:
         self.db=_DB(path)
         if not self.db.is_postgres: self.db.execute('PRAGMA foreign_keys=ON')
         self.db.executescript(SCHEMA)
+        if self.db.is_postgres:
+            self.db.execute("ALTER TABLE assets ADD COLUMN IF NOT EXISTS sha256 TEXT")
+            self.db.execute("UPDATE assets SET sha256=content_hash WHERE sha256 IS NULL")
+        else:
+            columns={row[1] for row in self.db.execute("PRAGMA table_info(assets)").fetchall()}
+            if "sha256" not in columns:
+                self.db.execute("ALTER TABLE assets ADD COLUMN sha256 TEXT")
+            self.db.execute("UPDATE assets SET sha256=content_hash WHERE sha256 IS NULL")
         self.db.execute("INSERT OR REPLACE INTO meta(k,v) VALUES('schema_version',?)",(str(SCHEMA_VERSION),)); self.db.commit()
     def close(self): self.db.close()
     def q(self,sql,params=()): return self.db.execute(sql,params).fetchall()
@@ -228,7 +236,7 @@ class CHUMA:
         if tmp.parent != root: raise CHUMAError('asset_path_forbidden')
         tmp.replace(path)
         t=now(); meta={'role':'character_reference','filename':filename,'mime_type':mime_type,'size_bytes':len(data)}
-        self.store.db.execute('INSERT INTO assets VALUES(?,?,?,?,?,?,?,?)',(aid,owner,cid,'REFERENCE','APPROVED',json.dumps(meta,ensure_ascii=False),digest,t))
+        self.store.db.execute('INSERT INTO assets VALUES(?,?,?,?,?,?,?,?,?)',(aid,owner,cid,'REFERENCE','APPROVED',json.dumps(meta,ensure_ascii=False),digest,digest,t))
         arid=uid('ART')
         self.store.db.execute('INSERT INTO artifacts VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',(arid,owner,cid,None,aid,'reference',mime_type,str(path),digest,'user-upload','READY',t))
         card=json.loads(row['card_json']); card['reference_asset_id']=aid; card['reference_artifact_id']=arid; card['reference_filename']=filename
@@ -249,7 +257,7 @@ class CHUMA:
         if tmp.parent != root: raise CHUMAError('asset_path_forbidden')
         tmp.replace(path); t=now()
         meta={'role':'character_voice','filename':filename,'mime_type':mime_type,'size_bytes':len(data)}
-        self.store.db.execute('INSERT INTO assets VALUES(?,?,?,?,?,?,?,?)',(aid,owner,cid,'VOICE','APPROVED',json.dumps(meta,ensure_ascii=False),digest,t))
+        self.store.db.execute('INSERT INTO assets VALUES(?,?,?,?,?,?,?,?,?)',(aid,owner,cid,'VOICE','APPROVED',json.dumps(meta,ensure_ascii=False),digest,digest,t))
         arid=uid('ART'); self.store.db.execute('INSERT INTO artifacts VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',(arid,owner,cid,None,aid,'voice',mime_type,str(path),digest,'user-upload','READY',t))
         card=json.loads(row['card_json'] or '{}'); card['voice_profile']={'source':'user','asset_id':aid,'artifact_id':arid,'filename':filename,'mime_type':mime_type}
         self.store.db.execute('UPDATE characters SET card_json=?,updated_at=?,version=version+1 WHERE character_id=? AND owner_id=?',(json.dumps(card,ensure_ascii=False),t,cid,owner)); self.store.commit()
@@ -301,7 +309,7 @@ class CHUMA:
                              {'kind':kind,'content_id':content_id,'provider':getattr(self.image_provider,'name','unknown'),
                               'error_type':type(exc).__name__})
             raise
-        self.store.db.execute('INSERT INTO assets VALUES(?,?,?,?,?,?,?,?)',(result['asset_id'],owner,cid,kind,result['status'],json.dumps(result['meta'],ensure_ascii=False),result['content_hash'],now()))
+        self.store.db.execute('INSERT INTO assets VALUES(?,?,?,?,?,?,?,?,?)',(result['asset_id'],owner,cid,kind,result['status'],json.dumps(result['meta'],ensure_ascii=False),result['content_hash'],result['content_hash'],now()))
         self.store.db.execute('INSERT INTO provider_runs VALUES(?,?,?,?,?,?,?,?)',(run_id,owner,getattr(self.image_provider,'name','unknown'),'IMAGE_GENERATE',json.dumps(req,ensure_ascii=False),json.dumps({'content_hash':result['content_hash'],'mime_type':result.get('mime_type'),'provider_meta':result.get('meta',{})},ensure_ascii=False),'SUCCEEDED',now()))
         if result.get('bytes') is not None:
             ext='svg' if result.get('mime_type')=='image/svg+xml' else 'bin'
@@ -333,7 +341,7 @@ class CHUMA:
             chosen=[self._generate_asset(owner,cid,'TARGETED',{'reason':'reference_driven_content' if reference_generation else 'content_gap'},brief=brief,content_id=content_id)]
         brief_id=uid('BRF'); production={'mode':'ASSEMBLY','asset_ids':chosen,'variants':['1:1','4:5','9:16'],'brief_id':brief_id}
         prov={'character_id':cid,'asset_ids':chosen,'schema_version':SCHEMA_VERSION,'engine_version':VERSION,'provider':getattr(self.image_provider,'name','unknown')}
-        self.store.db.execute('INSERT INTO content VALUES(?,?,?,?,?,?,?,?,?)',(content_id,owner,cid,json.dumps(idea), 'QC_PENDING',json.dumps(production),json.dumps(prov),t,t))
+        self.store.db.execute('INSERT INTO content VALUES(?,?,?,?,?,?,?,?,?)',(content_id,owner,cid,json.dumps(idea,ensure_ascii=False), 'QC_PENDING',json.dumps(production),json.dumps(prov),t,t))
         self.store.db.execute('INSERT INTO image_briefs VALUES(?,?,?,?,?,?,?,?)',(brief_id,owner,cid,content_id,json.dumps(brief,ensure_ascii=False),'READY',t,t))
         self.store.commit(); self.store.event(owner,'IMAGE_BRIEF_CREATED','CONTENT',content_id,brief); self.store.event(owner,'IMAGE_CONTENT_ASSEMBLED','CONTENT',content_id,production); return content_id
     def produce_variants(self,owner,content_id):
