@@ -7,6 +7,7 @@ TMP="/tmp/mini-ip-finish-$(date +%s)"
 BACKUP="${ROOT}.pre-final-$(date +%Y%m%d-%H%M%S)"
 [[ "$EUID" -eq 0 ]] || { echo "Запустите от root."; exit 1; }
 export DEBIAN_FRONTEND=noninteractive GIT_TERMINAL_PROMPT=0
+command -v rsync >/dev/null 2>&1 || { apt-get update -qq && apt-get install -y rsync; }
 mkdir -p "$TMP"
 echo "[1/8] Получение исходников..."
 git clone --depth 1 --single-branch "$REPO" "$TMP/repo"
