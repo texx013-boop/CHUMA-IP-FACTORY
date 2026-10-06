@@ -485,7 +485,7 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLower
                 return self.sendj(200,f.autonomous_cycle(data['owner_id'],data['character_id'],data.get('platform','local-test')))
             if p=='/jobs':
                 if not self.require_owner(data.get('owner_id')): return
-                payload={'character_id':data['character_id'],'platform':data.get('platform','local-test'),'max_attempts':data.get('max_attempts',3)}
+                payload={'character_id':data['character_id'],'platform':data.get('platform','local-test'),'max_attempts':data.get('max_attempts',3),'idea':data.get('idea') or ({'mechanic':'identity_discovery','hook':'visual curiosity'} if not data.get('brief') else {'mechanic':'user_brief','hook':data.get('brief'),'brief':data.get('brief')})}
                 jid=f.enqueue_job(data['owner_id'],'AUTONOMOUS_CYCLE',payload,data.get('idempotency_key'))
                 return self.sendj(202,{'job_id':jid,'status':'QUEUED'})
             self.sendj(404,{'error':'not_found'})
