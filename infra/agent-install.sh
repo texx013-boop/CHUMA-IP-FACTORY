@@ -29,6 +29,7 @@ install -d -m 0700 "$AGENT_DIR/executors"
 for executor in SHUMA_SPACE FILM_COMBAIN PERSONAL_AI_COMPANION; do install -m 0755 "$INFRA_DIR/executors/$executor.sh" "$AGENT_DIR/executors/$executor.sh"; done
 install -m 0755 "$INFRA_DIR/chuma-intelligence.sh" "$AGENT_DIR/chuma-intelligence.sh"
 install -m 0755 "$INFRA_DIR/chuma-release.sh" "$AGENT_DIR/chuma-release.sh"
+install -m 0755 "$INFRA_DIR/chuma-dev-api.py" "$AGENT_DIR/chuma-dev-api.py"
 
 install -m 0644 "$INFRA_DIR/chuma-agent.service" /etc/systemd/system/chuma-agent.service
 install -m 0644 "$INFRA_DIR/chuma-auto-update.service" /etc/systemd/system/chuma-auto-update.service
@@ -39,13 +40,14 @@ install -m 0644 "$INFRA_DIR/chuma-backup.timer" /etc/systemd/system/chuma-backup
 install -m 0644 "$INFRA_DIR/chuma-control.service" /etc/systemd/system/chuma-control.service
 install -m 0644 "$INFRA_DIR/chuma-control.timer" /etc/systemd/system/chuma-control.timer
 install -m 0644 "$INFRA_DIR/chuma-job-dispatcher.service" /etc/systemd/system/chuma-job-dispatcher.service
+install -m 0644 "$INFRA_DIR/chuma-dev.service" /etc/systemd/system/chuma-dev.service
 
 systemctl daemon-reload
 # Start the control API before the job dispatcher. The dispatcher explicitly requires it.
 systemctl enable --now chuma-control.service
 systemctl enable --now chuma-agent.service chuma-auto-update.service chuma-watchdog.service chuma-security-agent.service
 systemctl enable --now chuma-backup.timer chuma-control.timer
-systemctl enable --now chuma-job-dispatcher.service
+systemctl enable --now chuma-job-dispatcher.service chuma-dev.service
 
 # The first deployment is deliberately stable: the auto-updater is kept installed,
 # but it must not compete with the just-validated /opt/chuma deployment until a
