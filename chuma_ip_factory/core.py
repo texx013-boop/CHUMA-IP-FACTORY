@@ -388,10 +388,10 @@ class CHUMA:
         self.store.db.execute('UPDATE health SET content_score=?,audience_score=?,updated_at=? WHERE character_id=?',(min(1,engagement*20),min(1,follow_rate*100),now(),cid)); self.store.commit()
         self.store.event(owner,'METRICS_RECEIVED','PUBLICATION',publication_id,m); self.store.event(owner,'LEARNING_CREATED','CHARACTER',cid,{'engagement':engagement,'follow_rate':follow_rate})
         did=uid('DEC'); self.store.db.execute('INSERT INTO decisions VALUES(?,?,?,?,?,?,?,?,?,?)',(did,owner,cid,'What should next content test?','Reuse successful mechanic with controlled variation',json.dumps({'engagement':engagement,'follow_rate':follow_rate}), 'higher repeatability',None,None,now())); self.store.commit(); return {'metrics':m,'decision_id':did,'character_id':cid}
-    def autonomous_cycle(self,owner,cid,platform='local-test'):
+    def autonomous_cycle(self,owner,cid,platform='local-test',idea=None):
         self._auth(owner)
         init=self.initialize_character(owner,cid)
-        content=self.create_content(owner,cid)
+        content=self.create_content(owner,cid,idea=idea)
         self.qc(owner,content)
         variants=self.produce_variants(owner,content)
         pub=self.authorize_publish(owner,content,platform)
@@ -428,7 +428,7 @@ class CHUMA:
         payload=json.loads(row['payload_json']); owner=row['owner_id']
         try:
             if row['kind']=='AUTONOMOUS_CYCLE':
-                self.autonomous_cycle(owner,payload['character_id'],payload.get('platform','local-test'))
+                self.autonomous_cycle(owner,payload['character_id'],payload.get('platform','local-test'),payload.get('idea'))
             else:
                 raise CHUMAError('unknown_job_kind')
             self.store.db.execute("UPDATE jobs SET status='SUCCEEDED',updated_at=?,error=NULL WHERE job_id=?",(now(),job_id)); self.store.commit()
