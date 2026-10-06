@@ -6,7 +6,10 @@ APP_ROOT = Path(__file__).resolve().parent
 if str(APP_ROOT) not in sys.path:
     sys.path.insert(0, str(APP_ROOT))
 
-from chuma_ip_factory.api import run
+from chuma_ip_factory.api import run, API
+from mini_ip_ui import send_mini_ip
+
+API.send_html = send_mini_ip
 from chuma_ip_factory.core import HTTPImageProvider
 from chuma_ip_factory.hf_image import HFImageProvider
 from chuma_ip_factory.budget import BudgetGuardProvider, BudgetPolicy
