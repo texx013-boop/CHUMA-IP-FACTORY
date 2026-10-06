@@ -14,12 +14,12 @@ fi
 export DEBIAN_FRONTEND=noninteractive
 
 echo "[bootstrap] Installing base packages..."
-apt-get update -qq
-apt-get install -y -qq ca-certificates curl openssh-server openssh-client ufw openssl git >/dev/null
+apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update
+apt-get install -y ca-certificates curl openssh-server openssh-client ufw openssl git
 
 echo "[bootstrap] Ensuring Docker..."
 if ! command -v docker >/dev/null 2>&1; then
-  curl -fsSL https://get.docker.com | sh
+  curl -fL --connect-timeout 15 --max-time 180 --retry 3 --retry-delay 2 https://get.docker.com | sh
 fi
 systemctl enable --now docker
 docker info >/dev/null
