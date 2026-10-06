@@ -52,22 +52,28 @@ done
 curl -fsS --max-time 10 http://127.0.0.1/health >/dev/null
 curl -fsS --max-time 10 http://127.0.0.1/ready >/dev/null
 echo "[7/8] Проверка браузерного контура..."
-UI="$(curl -fsS --max-time 15 "http://$PUBLIC_IP/")"
+# Проверяем реальный Caddy-маршрут через loopback + Host.
+# Не полагаемся на hairpin NAT: сервер не обязан обращаться к собственному public IP.
+UI="$(curl -fsS --max-time 15 -H "Host: $PUBLIC_IP" http://127.0.0.1/)"
 grep -q "MINI IP" <<<"$UI"
 grep -q "Персонаж" <<<"$UI"
 grep -q "Фото персонажа" <<<"$UI"
 grep -q "Путь персонажа" <<<"$UI"
 grep -q "Создать первый контент" <<<"$UI"
-DEV_CODE="$(curl -sS -o /dev/null -w "%{http_code}" --max-time 15 "http://$PUBLIC_IP/control/dev/")"
+DEV_CODE="$(curl -sS -o /dev/null -w "%{http_code}" --max-time 15 -H "Host: $PUBLIC_IP" http://127.0.0.1/control/dev/)"
 [[ "$DEV_CODE" == "401" || "$DEV_CODE" == "200" ]]
-curl -fsS --max-time 15 "http://$PUBLIC_IP/health" >/dev/null
-curl -fsS --max-time 15 "http://$PUBLIC_IP/ready" >/dev/null
+curl -fsS --max-time 15 -H "Host: $PUBLIC_IP" http://127.0.0.1/health >/dev/null
+curl -fsS --max-time 15 -H "Host: $PUBLIC_IP" http://127.0.0.1/ready >/dev/null
+# Внешний probe только информативный: hairpin/NAT не должен откатывать здоровый сервер.
+PUBLIC_HTTP="$(curl -sS -o /dev/null -w "%{http_code}" --connect-timeout 5 --max-time 10 "http://$PUBLIC_IP/" || true)"
+echo "External HTTP probe: ${PUBLIC_HTTP:-failed}"
 echo "[8/8] Проверка после перезапуска..."
 docker compose restart
 sleep 5
-curl -fsS --max-time 10 http://127.0.0.1/health >/dev/null
-curl -fsS --max-time 10 http://127.0.0.1/ready >/dev/null
-curl -fsS --max-time 10 "http://$PUBLIC_IP/health" >/dev/null
+curl -fsS --max-time 10 -H "Host: $PUBLIC_IP" http://127.0.0.1/health >/dev/null
+curl -fsS --max-time 10 -H "Host: $PUBLIC_IP" http://127.0.0.1/ready >/dev/null
+POST_RESTART_HTTP="$(curl -sS -o /dev/null -w "%{http_code}" --connect-timeout 5 --max-time 10 "http://$PUBLIC_IP/health" || true)"
+echo "External HTTP after restart: ${POST_RESTART_HTTP:-failed}"
 trap - EXIT
 rm -rf "$TMP"
 echo
