@@ -161,7 +161,7 @@ class Handler(BaseHTTPRequestHandler):
         if path=="/api/test":
             return self.sendj(200,compile_and_test())
         if path=="/api/build":
-            rc,out,err=run("docker","compose","build","app",cwd=DEV_ROOT,timeout=600); return self.sendj(200,{"ok":rc==0,"output":out,"error":err})
+            rc,out,err=run("docker","build","-t","mini-ip-dev:check","-f","Dockerfile",".",cwd=DEV_ROOT,timeout=600); return self.sendj(200,{"ok":rc==0,"output":out,"error":err})
         if path=="/api/pull":
             rc,out,err=run("git","fetch","origin","main","--depth","1",cwd=DEV_ROOT,timeout=120)
             if rc==0: rc,out,err=run("git","reset","--hard","origin/main",cwd=DEV_ROOT,timeout=60)
