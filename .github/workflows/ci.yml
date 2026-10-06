@@ -20,6 +20,7 @@ jobs:
         run: python -m pip install --upgrade pip && pip install -e . && pip install "psycopg[binary]>=3.2,<4" pytest
       - name: Compile
         run: python -m compileall -q chuma_ip_factory run.py
+          python -m py_compile infra/chuma-control-api.py infra/chuma-dev-api.py
       - name: Test
         run: python -m pytest -q
       - name: Validate deployment manifests
@@ -61,6 +62,12 @@ jobs:
           touch /opt/chuma/infra/backup.sh
           chmod 755 /opt/chuma/infra/backup.sh
           for f in infra/*.service; do systemd-analyze verify "$f"; done
+          test -f infra/chuma-dev-api.py
+          test -f infra/chuma-dev.service
+          grep -q 'os.chmod(SOCKET_PATH,0o666)' infra/chuma-dev-api.py
+          grep -q 'reverse_proxy unix//opt/chuma/control/dev.sock' infra/Caddyfile
+          grep -q '/opt/chuma/control:/opt/chuma/control:ro' infra/compose.yml
+          grep -q 'systemctl enable --now chuma-job-dispatcher.service chuma-dev.service' infra/agent-install.sh
           test -f infra/chuma-backup.service
           test -f infra/chuma-backup.timer
           test -f infra/github-access.sh
