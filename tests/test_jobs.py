@@ -14,6 +14,8 @@ def test_job_queue_is_idempotent_and_runs():
     assert c.store.one("SELECT COUNT(*) n FROM jobs WHERE owner_id=?",(o,))["n"]==1
     content=c.store.one("SELECT idea_json FROM content WHERE owner_id=? ORDER BY created_at DESC LIMIT 1",(o,))
     assert "Кафе в Москве" in content["idea_json"]
+    assert c.store.one("SELECT COUNT(*) n FROM signals WHERE owner_id=?",(o,))["n"] == 2
+    assert c.store.one("SELECT COUNT(*) n FROM decisions WHERE owner_id=?",(o,))["n"] == 1
     d.cleanup()
 
 def test_job_failure_retries_then_dead_letters():
