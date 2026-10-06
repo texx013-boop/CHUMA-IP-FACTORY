@@ -70,6 +70,9 @@ curl -fsS --max-time 10 "http://$PUBLIC_IP/health" >/dev/null
 trap - EXIT
 rm -rf "$TMP"
 echo
+PAIR_CODE="$(python3 "$ROOT/agent/chuma-control-api.py" pair)"
 echo "MINI IP FINAL READY"
 echo "http://$PUBLIC_IP/"
+echo "Dev Console: http://$PUBLIC_IP/control/dev/"
+echo "Код первого сопряжения Dev Console: $PAIR_CODE"
 echo "Предыдущая версия: $BACKUP"
