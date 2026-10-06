@@ -44,34 +44,38 @@ echo "[5/8] Сборка и запуск..."
 cd "$ROOT/infra"
 docker compose up -d --build
 docker compose ps
-echo "[6/8] Локальная проверка..."
+echo "[6/8] Локальная проверка приложения..."
 for i in $(seq 1 60); do
-  curl -fsS --max-time 5 http://127.0.0.1/health >/dev/null 2>&1 && break
+  docker compose exec -T app python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8097/health', timeout=3)" >/dev/null 2>&1 && break
   sleep 2
 done
-curl -fsS --max-time 10 http://127.0.0.1/health >/dev/null
-curl -fsS --max-time 10 http://127.0.0.1/ready >/dev/null
+docker compose exec -T app python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8097/health', timeout=5)"
+docker compose exec -T app python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8097/ready', timeout=5)"
+docker compose exec -T proxy caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+CADDY_HOST="$(docker compose exec -T proxy /bin/sh -c 'printf %s "$CHUMA_DOMAIN"' | tr -d '')"
+[[ -n "$CADDY_HOST" ]]
 echo "[7/8] Проверка браузерного контура..."
-# Проверяем реальный Caddy-маршрут через loopback + Host.
-# Не полагаемся на hairpin NAT: сервер не обязан обращаться к собственному public IP.
-UI="$(curl -fsS --max-time 15 -H "Host: $PUBLIC_IP" http://127.0.0.1/)"
+# Проверяем Caddy с тем же Host, который реально настроен в production.
+UI="$(curl -fsS --max-time 15 -H "Host: $CADDY_HOST" http://127.0.0.1/)"
 grep -q "MINI IP" <<<"$UI"
 grep -q "Персонаж" <<<"$UI"
 grep -q "Фото персонажа" <<<"$UI"
 grep -q "Путь персонажа" <<<"$UI"
 grep -q "Создать первый контент" <<<"$UI"
-DEV_CODE="$(curl -sS -o /dev/null -w "%{http_code}" --max-time 15 -H "Host: $PUBLIC_IP" http://127.0.0.1/control/dev/)"
+DEV_CODE="$(curl -sS -o /dev/null -w "%{http_code}" --max-time 15 -H "Host: $CADDY_HOST" http://127.0.0.1/control/dev/)"
 [[ "$DEV_CODE" == "401" || "$DEV_CODE" == "200" ]]
-curl -fsS --max-time 15 -H "Host: $PUBLIC_IP" http://127.0.0.1/health >/dev/null
-curl -fsS --max-time 15 -H "Host: $PUBLIC_IP" http://127.0.0.1/ready >/dev/null
+curl -fsS --max-time 15 -H "Host: $CADDY_HOST" http://127.0.0.1/health >/dev/null
+curl -fsS --max-time 15 -H "Host: $CADDY_HOST" http://127.0.0.1/ready >/dev/null
 # Внешний probe только информативный: hairpin/NAT не должен откатывать здоровый сервер.
 PUBLIC_HTTP="$(curl -sS -o /dev/null -w "%{http_code}" --connect-timeout 5 --max-time 10 "http://$PUBLIC_IP/" || true)"
 echo "External HTTP probe: ${PUBLIC_HTTP:-failed}"
 echo "[8/8] Проверка после перезапуска..."
 docker compose restart
 sleep 5
-curl -fsS --max-time 10 -H "Host: $PUBLIC_IP" http://127.0.0.1/health >/dev/null
-curl -fsS --max-time 10 -H "Host: $PUBLIC_IP" http://127.0.0.1/ready >/dev/null
+docker compose exec -T app python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8097/health', timeout=5)"
+docker compose exec -T app python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8097/ready', timeout=5)"
+curl -fsS --max-time 10 -H "Host: $CADDY_HOST" http://127.0.0.1/health >/dev/null
+curl -fsS --max-time 10 -H "Host: $CADDY_HOST" http://127.0.0.1/ready >/dev/null
 POST_RESTART_HTTP="$(curl -sS -o /dev/null -w "%{http_code}" --connect-timeout 5 --max-time 10 "http://$PUBLIC_IP/health" || true)"
 echo "External HTTP after restart: ${POST_RESTART_HTTP:-failed}"
 trap - EXIT
