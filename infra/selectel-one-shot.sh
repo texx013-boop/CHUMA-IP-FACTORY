@@ -15,12 +15,12 @@ export GIT_TERMINAL_PROMPT=0
 export GIT_SSH_COMMAND="ssh -o ConnectTimeout=15 -o BatchMode=yes"
 
 echo "[1/7] Preparing server..."
-apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update -qq
-apt-get install -y -qq ca-certificates curl git openssl >/dev/null
+apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update
+apt-get install -y ca-certificates curl git openssl
 
 echo "[2/7] Preparing Docker..."
 if ! command -v docker >/dev/null 2>&1; then
-  curl -fsSL --connect-timeout 15 --max-time 180 --retry 3 --retry-delay 2 https://get.docker.com | sh
+  curl -fL --connect-timeout 15 --max-time 180 --retry 3 --retry-delay 2 https://get.docker.com | sh
 fi
 systemctl enable --now docker
 docker info >/dev/null
