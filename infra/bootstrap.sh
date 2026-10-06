@@ -15,7 +15,7 @@ export DEBIAN_FRONTEND=noninteractive
 
 echo "[bootstrap] Installing base packages..."
 apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update
-apt-get install -y ca-certificates curl openssh-server openssh-client ufw openssl git
+apt-get install -y ca-certificates curl openssh-server openssh-client ufw openssl git rsync
 
 echo "[bootstrap] Ensuring Docker..."
 if ! command -v docker >/dev/null 2>&1; then
