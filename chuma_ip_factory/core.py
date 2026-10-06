@@ -441,11 +441,45 @@ class CHUMA:
             self.store.db.execute("UPDATE jobs SET status=?,next_run_at=?,updated_at=?,error=? WHERE job_id=?",(status,now() if terminal else now()+delay,now(),f'{type(exc).__name__}: {exc}',job_id)); self.store.commit()
             self.store.event(owner,'JOB_DEAD_LETTERED' if terminal else 'JOB_RETRY_SCHEDULED','JOB',job_id,{'attempt':attempts,'max_attempts':max_attempts,'error':str(exc),'retry_in':delay})
         return self.get_job(job_id)
+    def growth_recommendation(self,owner,cid):
+        self._auth(owner)
+        rows=self.store.q("SELECT content_id,idea_json,created_at FROM content WHERE owner_id=? AND character_id=? ORDER BY created_at",(owner,cid))
+        scored=[]
+        direction_names={
+            'discovery_daily':'Повседневность и жизнь',
+            'discovery_humor':'Характер и юмор',
+            'discovery_story':'Истории и личность',
+            'discovery_visual':'Визуальный IP',
+            'discovery_social':'Социальные сети',
+            'discovery_surprise':'Неожиданность и оригинальность'
+        }
+        for row in rows:
+            idea=json.loads(row['idea_json'] or '{}')
+            sig=self.store.one("SELECT AVG(value) v, COUNT(*) n FROM signals WHERE owner_id=? AND character_id=? AND content_id=? AND kind='ENGAGEMENT'",(owner,cid,row['content_id']))
+            if not sig or not sig['n']: continue
+            direction=idea.get('direction') or direction_names.get(idea.get('mechanic'),'')
+            if not direction: continue
+            scored.append((direction,float(sig['v'] or 0.0),int(sig['n'] or 0),idea.get('mechanic','')))
+        if not scored:
+            return {'stage':'DISCOVERY','confidence':0.0,'recommendation':None,'tested':0,'message':'Пока данных недостаточно. Проведи несколько разных экспериментов.'}
+        groups={}
+        for direction,value,n,mechanic in scored:
+            g=groups.setdefault(direction,{'values':[],'mechanics':set()})
+            g['values'].append(value); g['mechanics'].add(mechanic)
+        ranked=sorted(((d,sum(g['values'])/len(g['values']),len(g['values']),g['mechanics']) for d,g in groups.items()),key=lambda x:(x[1],x[2]),reverse=True)
+        best=ranked[0]
+        confidence=min(1.0,(len(scored)/6.0))*min(1.0,best[2]/3.0)
+        if len(scored)<3:
+            return {'stage':'DISCOVERY','confidence':round(confidence,3),'recommendation':None,'tested':len(scored),'message':'Мы ещё знакомимся с персонажем. Нужно немного больше опыта.'}
+        return {'stage':'FORMATION','confidence':round(confidence,3),'recommendation':best[0],'score':round(best[1],6),'tested':len(scored),'alternatives':[{'direction':d,'score':round(v,6),'tests':n} for d,v,n,_ in ranked[1:4]],'message':'Это текущая гипотеза, а не окончательное решение. Её нужно проверить следующими экспериментами.'}
+
     def status(self,owner):
         self._auth(owner); out={}
         for table in ['characters','assets','content','experiments','publications','signals','audience_memory','decisions','jobs','events','audit','image_briefs','artifacts','provider_runs']:
             out[table]=self.store.one(f'SELECT COUNT(*) n FROM {table} WHERE owner_id=?',(owner,))['n']
         out['version']=VERSION; out['schema_version']=SCHEMA_VERSION
+        char_ids=[r['character_id'] for r in self.store.q('SELECT character_id FROM characters WHERE owner_id=? ORDER BY created_at',(owner,))]
+        out['growth']={cid:self.growth_recommendation(owner,cid) for cid in char_ids}
         out['jobs_detail']=[self.get_job(r['job_id']) for r in self.store.q('SELECT job_id FROM jobs WHERE owner_id=? ORDER BY created_at DESC LIMIT 20',(owner,))]
         chars=self.store.q('SELECT character_id,name,state,version FROM characters WHERE owner_id=? ORDER BY created_at',(owner,))
         out['characters_detail']=[dict(c) for c in chars]
