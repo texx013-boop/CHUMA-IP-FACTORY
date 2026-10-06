@@ -1,0 +1,22 @@
+[Unit]
+Description=Mini IP Mobile Development Console
+After=network-online.target docker.service chuma-control.service
+Wants=network-online.target
+Requires=chuma-control.service
+
+[Service]
+Type=simple
+User=root
+Environment=APP_ROOT=/opt/chuma
+ExecStart=/usr/bin/python3 /opt/chuma/agent/chuma-dev-api.py
+Restart=always
+RestartSec=2
+NoNewPrivileges=false
+PrivateTmp=true
+ProtectSystem=full
+ReadWritePaths=/opt/chuma /run
+StandardOutput=append:/opt/chuma/control/state/dev-api.log
+StandardError=append:/opt/chuma/control/state/dev-api.log
+
+[Install]
+WantedBy=multi-user.target
