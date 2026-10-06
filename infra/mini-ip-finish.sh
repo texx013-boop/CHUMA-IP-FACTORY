@@ -36,6 +36,9 @@ if [[ -f "$BACKUP/infra/.env" ]]; then
   cp "$BACKUP/infra/.env" "$ROOT/infra/.env"
   chmod 600 "$ROOT/infra/.env"
 fi
+echo "[5/8] Установка Control/Dev Console и сборка..."
+chmod +x "$ROOT/infra/agent-install.sh" "$ROOT/infra/chuma-dev-api.py" || true
+"$ROOT/infra/agent-install.sh"
 echo "[5/8] Сборка и запуск..."
 cd "$ROOT/infra"
 docker compose up -d --build
@@ -51,10 +54,11 @@ echo "[7/8] Проверка браузерного контура..."
 UI="$(curl -fsS --max-time 15 "http://$PUBLIC_IP/")"
 grep -q "MINI IP" <<<"$UI"
 grep -q "Персонаж" <<<"$UI"
-grep -q "Создать контент" <<<"$UI"
-grep -q "Карточка персонажа" <<<"$UI"
-grep -q "Обучение и сигналы" <<<"$UI"
-grep -q "Эволюция персонажа" <<<"$UI"
+grep -q "Фото персонажа" <<<"$UI"
+grep -q "Путь персонажа" <<<"$UI"
+grep -q "Создать первый контент" <<<"$UI"
+DEV_CODE="$(curl -sS -o /dev/null -w "%{http_code}" --max-time 15 "http://$PUBLIC_IP/control/dev/")"
+[[ "$DEV_CODE" == "401" || "$DEV_CODE" == "200" ]]
 curl -fsS --max-time 15 "http://$PUBLIC_IP/health" >/dev/null
 curl -fsS --max-time 15 "http://$PUBLIC_IP/ready" >/dev/null
 echo "[8/8] Проверка после перезапуска..."
