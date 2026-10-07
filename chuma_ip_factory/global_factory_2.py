@@ -99,8 +99,19 @@ class Factory2:
             self.db.execute("UPDATE gf_distributions SET state='BLOCKED_AUTH',updated_at=? WHERE id=?",(now(),distribution_id)); self.commit()
             raise ValueError("distribution_blocked_auth")
         adapter=self.distribution_adapter(row["platform"])
+        content_row=self.chuma.store.one("SELECT idea_json,character_id FROM content WHERE content_id=? AND owner_id=?",
+                                          (row["content_id"],owner))
+        if not content_row:
+            raise ValueError("content_not_found")
+        idea=json.loads(content_row["idea_json"] or "{}")
+        text_parts=[str(idea.get("text") or "").strip(),
+                    str(idea.get("caption") or "").strip(),
+                    str(idea.get("hook") or "").strip()]
+        publish_text=next((x for x in text_parts if x), "")
         try:
-            result=adapter.publish({"content_id":row["content_id"],"account_id":connection["account_id"],"credential_ref":connection["credential_ref"]})
+            result=adapter.publish({"content_id":row["content_id"],"character_id":content_row["character_id"],
+                                    "text":publish_text,"account_id":connection["account_id"],
+                                    "credential_ref":connection["credential_ref"]})
         except Exception as exc:
             self.db.execute("UPDATE gf_distributions SET state='FAILED',result_json=?,updated_at=? WHERE id=?",
                             (json.dumps({"error":type(exc).__name__,"message":"provider_publish_failed"},ensure_ascii=False),now(),distribution_id))
@@ -512,7 +523,80 @@ class ExternalDistributionAdapter:
 class ExternalProviderError(Exception):
     pass
 
-EXTERNAL_ADAPTERS = {}
+class VKOfficialAdapter(ExternalDistributionAdapter):
+    """Official VK API adapter. Secrets are resolved from the runtime environment only."""
+    mode="official_api"
+    capabilities={"publish":True,"measurement":True}
+    api_base="https://api.vk.com/method"
+    api_version=os.getenv("VK_API_VERSION","5.199")
+
+    @staticmethod
+    def _secret_env_name(credential_ref):
+        digest=hashlib.sha256(str(credential_ref).encode()).hexdigest().upper()
+        return "GF2_SECRET_"+digest[:40]
+
+    def _resolve_token(self, credential_ref):
+        if not str(credential_ref).startswith(("oauth://","secret-manager://","vault://")):
+            raise ExternalProviderError("credential_ref_invalid")
+        token=os.getenv(self._secret_env_name(credential_ref))
+        if not token:
+            raise ExternalProviderError("credential_resolution_unavailable")
+        return token
+
+    def request(self, method, params, token):
+        query=dict(params or {})
+        query["access_token"]=token
+        query["v"]=self.api_version
+        encoded=__import__("urllib.parse",fromlist=["urlencode"]).urlencode(query)
+        req=__import__("urllib.request",fromlist=["Request"]).Request(
+            f"{self.api_base}/{method}",data=encoded.encode(),method="POST",
+            headers={"Content-Type":"application/x-www-form-urlencoded"})
+        try:
+            with __import__("urllib.request",fromlist=["urlopen"]).urlopen(req,timeout=20) as response:
+                body=json.loads(response.read().decode("utf-8"))
+        except Exception as exc:
+            raise ExternalProviderError("provider_network_error") from exc
+        if body.get("error"):
+            raise ExternalProviderError("provider_api_error")
+        return body.get("response") or {}
+
+    def publish(self, payload):
+        owner_id=int(str(payload.get("account_id") or "0"))
+        if owner_id==0:
+            raise ExternalProviderError("account_id_required")
+        text=str(payload.get("text") or "").strip()
+        if not text:
+            raise ExternalProviderError("text_required")
+        token=self._resolve_token(payload.get("credential_ref"))
+        response=self.request("wall.post",{"owner_id":owner_id,"message":text,"from_group":1 if owner_id < 0 else 0},token)
+        post_id=response.get("post_id")
+        if not post_id:
+            raise ExternalProviderError("provider_missing_post_id")
+        return {"state":"PUBLISHED","provider":"vk","mode":self.mode,
+                "external_id":f"{owner_id}_{int(post_id)}","post_id":int(post_id),
+                "provenance":{"api":"wall.post","api_version":self.api_version}}
+
+    def fetch_measurement(self, payload):
+        external_id=str(payload.get("external_id") or "")
+        if "_" not in external_id:
+            raise ExternalProviderError("external_id_invalid")
+        owner_id,post_id=external_id.rsplit("_",1)
+        token=self._resolve_token(payload.get("credential_ref"))
+        response=self.request("wall.getById",{"posts":f"{int(owner_id)}_{int(post_id)}"},token)
+        items=response.get("items") or []
+        if not items:
+            raise ExternalProviderError("provider_post_not_found")
+        post=items[0]
+        views=(post.get("views") or {}).get("count",0)
+        likes=(post.get("likes") or {}).get("count",0)
+        comments=(post.get("comments") or {}).get("count",0)
+        reposts=(post.get("reposts") or {}).get("count",0)
+        return {"views":float(views),"likes":float(likes),"comments":float(comments),
+                "shares":float(reposts),"saves":0.0,"follows":0.0,
+                "measurement_mode":"external","provider":"vk","external_id":external_id,
+                "provenance":{"api":"wall.getById","api_version":self.api_version}}
+
+EXTERNAL_ADAPTERS = {"vk": VKOfficialAdapter}
 
 def register_external_adapter(platform, adapter_cls):
     key=str(platform or "").strip().lower()
