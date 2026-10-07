@@ -43,8 +43,8 @@ class Factory2:
         import hashlib
         salt=secrets.token_hex(16)
         digest=hashlib.pbkdf2_hmac("sha256",password.encode(),salt.encode(),180000).hex()
-        self.db.execute("INSERT INTO gf_users VALUES(?,?,?,?,?)",(uid("OWN"),username,salt+"$"+digest,now()))
-        owner=self.db.execute("SELECT owner_id FROM gf_users WHERE username=?",(username,)).fetchone()[0]
+        owner=self.chuma.owner()
+        self.db.execute("INSERT INTO gf_users VALUES(?,?,?,?,?)",(owner,username,salt+"$"+digest,now()))
         self.db.execute("INSERT INTO gf_settings(owner_id) VALUES(?)",(owner,))
         self.db.execute("INSERT INTO gf_funds(owner_id,updated_at) VALUES(?,?)",(owner,now()))
         self.commit()
