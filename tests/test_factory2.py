@@ -490,3 +490,24 @@ def test_factory2_vk_missing_artifact_fails_closed_after_content_exists():
         except ExternalProviderError as exc:
             assert str(exc)=="content_artifact_missing"
         f.close()
+
+
+def test_factory2_distribution_claim_prevents_second_submit_while_publishing():
+    with tempfile.TemporaryDirectory() as td:
+        f=Factory2(Path(td)/"factory.db", Path(td)/"media")
+        owner=f.create_owner("owner","password123")
+        cid=f.bootstrap_character(owner,"Test IP")
+        f.set_compliance_rule(owner,"vk","publish","RU","GREEN",True,source="test",note="provider contract")
+        f.connect_platform(owner,"vk",account_id="-42",credential_ref="oauth://vk/test")
+        content_id="content-claim"
+        f.chuma.store.db.execute(
+            "INSERT INTO content VALUES(?,?,?,?,?,?,?,?,?)",
+            (content_id,owner,cid,json.dumps({"text":"hello"}), "READY",
+             json.dumps({}),json.dumps({"test":True}),int(time.time()),int(time.time())))
+        f.chuma.store.commit()
+        d=f.prepare_distribution(owner,content_id,"vk")
+        f.db.execute("UPDATE gf_distributions SET state='PUBLISHING' WHERE id=?",(d["id"],))
+        f.commit()
+        result=f.submit_distribution(owner,d["id"])
+        assert result["state"]=="PUBLISHING"
+        f.close()
