@@ -1,5 +1,5 @@
 from __future__ import annotations
-import json, os
+import json, os, threading, time
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import urlsplit
 from .global_factory_2 import Factory2, VERSION
@@ -53,7 +53,22 @@ class Handler(BaseHTTPRequestHandler):
         except Exception as e:
             print("GLOBAL FACTORY 2:",type(e).__name__,flush=True)
             return self.json(400,{"error":"request_failed"})
+def _worker(service, stop):
+    while not stop.is_set():
+        try:
+            row=service.one("SELECT job_id FROM jobs WHERE status='QUEUED' AND next_run_at<=? ORDER BY created_at LIMIT 1",(int(time.time()),))
+            if row:
+                service.chuma.run_job(row["job_id"])
+                continue
+        except Exception as exc:
+            print("GLOBAL FACTORY 2 worker:",type(exc).__name__,flush=True)
+        stop.wait(1)
+
 def run_factory2(host="0.0.0.0",port=8097,db="runtime/factory2.db",media_root="runtime/media"):
     service=Factory2(db,media_root); Handler.service=service
+    stop=threading.Event()
+    threading.Thread(target=_worker,args=(service,stop),daemon=True,name="factory2-worker").start()
     try: HTTPServer((host,port),Handler).serve_forever()
-    finally: service.close()
+    finally:
+        stop.set()
+        service.close()
