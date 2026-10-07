@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS gf_ip_health(character_id TEXT PRIMARY KEY, owner_id 
 CREATE TABLE IF NOT EXISTS gf_sessions(token TEXT PRIMARY KEY, owner_id TEXT NOT NULL, expires_at INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS gf_spend_ledger(id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, category TEXT NOT NULL, amount REAL NOT NULL, ip_id TEXT, approved INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL, note TEXT NOT NULL, created_at INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS gf_notifications(id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, level TEXT NOT NULL, kind TEXT NOT NULL, title TEXT NOT NULL, detail TEXT NOT NULL, acknowledged INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS gf_attention(id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, character_id TEXT, priority INTEGER NOT NULL, kind TEXT NOT NULL, title TEXT NOT NULL, detail TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'OPEN', created_at INTEGER NOT NULL, resolved_at INTEGER);
 """
 
 def now(): return int(time.time())
@@ -93,7 +94,8 @@ class Factory2:
 "ip_health":[dict(x) for x in health],
 "spend_today":float(self.one("SELECT COALESCE(SUM(amount),0) n FROM gf_spend_ledger WHERE owner_id=? AND status='COMMITTED' AND created_at>=?",(owner,now()-86400))["n"]),
 "spend_month":float(self.one("SELECT COALESCE(SUM(amount),0) n FROM gf_spend_ledger WHERE owner_id=? AND status='COMMITTED' AND created_at>=?",(owner,now()-30*86400))["n"]),
-"notifications":[dict(x) for x in self.all("SELECT id,level,kind,title,detail,acknowledged,created_at FROM gf_notifications WHERE owner_id=? ORDER BY created_at DESC LIMIT 20",(owner,))]}
+"notifications":[dict(x) for x in self.all("SELECT id,level,kind,title,detail,acknowledged,created_at FROM gf_notifications WHERE owner_id=? ORDER BY created_at DESC LIMIT 20",(owner,))],
+"attention":[dict(x) for x in self.all("SELECT id,character_id,priority,kind,title,detail,status,created_at FROM gf_attention WHERE owner_id=? AND status='OPEN' ORDER BY priority DESC,created_at DESC LIMIT 20",(owner,))]}
     def start(self, owner):
         s=self.one("SELECT * FROM gf_settings WHERE owner_id=?",(owner,))
         if s["safe_mode"]: raise ValueError("safe_mode")
@@ -115,6 +117,37 @@ class Factory2:
         self.db.execute("INSERT INTO gf_notifications VALUES(?,?,?,?,?,?,?,?)",(nid,owner,level,kind,title,detail,0,now()))
         self.commit()
         return nid
+
+    def attention(self, owner, character_id=None, priority=50, kind="INFO", title="", detail=""):
+        aid=uid("ATT")
+        self.db.execute("INSERT INTO gf_attention VALUES(?,?,?,?,?,?,?,?,?,?)",(aid,owner,character_id,int(priority),kind,title,detail,"OPEN",now(),None))
+        self.commit()
+        if priority>=80:
+            self.notify(owner,"IMPORTANT","ATTENTION",title,detail)
+        self.event(owner,"OWNER_ATTENTION",{"attention_id":aid,"priority":priority,"kind":kind,"character_id":character_id})
+        return aid
+
+    def resolve_attention(self, owner, attention_id):
+        self.db.execute("UPDATE gf_attention SET status='RESOLVED',resolved_at=? WHERE id=? AND owner_id=?",(now(),attention_id,owner))
+        self.commit()
+        return True
+
+    def learn_from_signal(self, owner, character_id):
+        sigs=self.all("SELECT kind,value,confidence,source FROM gf_signals WHERE owner_id=? AND character_id=? ORDER BY created_at DESC LIMIT 50",(owner,character_id))
+        if not sigs: return None
+        by={}
+        for x in sigs:
+            by.setdefault(x["kind"],[]).append(float(x["value"]))
+        engagement=sum(by.get("engagement",[]))/len(by.get("engagement",[])) if by.get("engagement") else None
+        target="continue_experiment" if engagement is not None and engagement>=0.5 else "change_hook"
+        lesson=("Observed positive engagement; preserve the tested hook and iterate." if target=="continue_experiment" else "Observed weak engagement; test a different hook.")
+        did=uid("DEC")
+        evidence={"signals":len(sigs),"engagement_avg":engagement,"target":target}
+        self.db.execute("INSERT INTO gf_decisions VALUES(?,?,?,?,?,?,?,?)",(did,owner,character_id,"What should the next content experiment do?",target,json.dumps(evidence,ensure_ascii=False),lesson,now()))
+        self.commit()
+        if target=="change_hook":
+            self.attention(owner,character_id,60,"LEARNING","Нужно изменить гипотезу","Сигнал вовлечения слабый — следующий эксперимент должен проверить другой hook.")
+        return {"decision_id":did,"decision":target,"lesson":lesson,"evidence":evidence}
 
     def spend(self, owner, amount, category="growth", ip_id=None, approved=False, note=""):
         amount=float(amount)
@@ -225,7 +258,9 @@ class Factory2:
         self.db.execute("UPDATE gf_experiments SET status='RUNNING',content_id=?,updated_at=? WHERE id=?",(content_id,now(),eid)); self.commit()
         if content_id:
             self.record_signal(owner,character_id,"engagement",0.0,content_id,0.1,"awaiting_distribution")
-        return {"experiment_id":eid,"content_id":content_id,"cycle":result,"health":self.evolve_ip_health(owner,character_id)}
+        decision=self.learn_from_signal(owner,character_id)
+        self.attention(owner,character_id,40,"CYCLE","Новый эксперимент запущен",f"Эксперимент {eid} создан; ожидается реальный сигнал после распределения.")
+        return {"experiment_id":eid,"content_id":content_id,"cycle":result,"learning":decision,"health":self.evolve_ip_health(owner,character_id)}
 
     def connect_platform(self, owner, platform):
         platform=str(platform or "").strip().lower()
