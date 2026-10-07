@@ -29,9 +29,12 @@ class Handler(BaseHTTPRequestHandler):
         if n < 0: raise ValueError("invalid_content_length")
         if n>1024*1024: raise ValueError("payload_too_large")
         try:
-            return json.loads(self.rfile.read(n) or "{}")
+            data=json.loads(self.rfile.read(n) or "{}")
         except json.JSONDecodeError as exc:
             raise ValueError("invalid_json") from exc
+        if not isinstance(data,dict):
+            raise ValueError("invalid_json")
+        return data
     def do_GET(self):
         p=urlsplit(self.path).path
         if p in ("/","/factory2"): return send_html(self)
