@@ -199,3 +199,13 @@ Checkpoint: `e05a309a2528dc334820e7475f5bf60e09741a81`
 - Provider/content/artifact failures remain fail-closed and transition the distribution to `FAILED`.
 - Added regression coverage for the concurrent-submit claim boundary.
 - This is source-level hardening; no live provider call or production smoke test is claimed.
+
+
+## 2026-10-08 — Owner session regression hardening
+
+Checkpoint: `18b838f987b67ba2f1235dde066dc094438897cb`
+
+- Added regression coverage proving an expired bearer session is rejected by the Owner authentication boundary.
+- Session tokens remain stored only as SHA-256 hashes and expire server-side.
+- Remote server verification remains pending because the registered remote development device is currently offline.
+- GitHub Actions currently exposes no workflow run for these commits, so CI PASS is not claimed.
