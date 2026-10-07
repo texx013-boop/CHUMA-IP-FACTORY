@@ -14,9 +14,22 @@ from chuma_ip_factory.core import HTTPImageProvider
 from chuma_ip_factory.hf_image import HFImageProvider
 from chuma_ip_factory.budget import BudgetGuardProvider, BudgetPolicy
 from chuma_ip_factory.video_combain import HTTPVideoEngine, BudgetVideoEngine
+from chuma_ip_factory.factory2_server import run_factory2
 
 
 if __name__ == '__main__':
+    if os.getenv('GLOBAL_FACTORY_2', '').strip().lower() in ('1','true','yes','on'):
+        default_data_dir = '/data' if Path('/data').exists() else str(APP_ROOT / 'runtime')
+        data_dir = Path(os.getenv('CHUMA_DATA_DIR', default_data_dir))
+        data_dir.mkdir(parents=True, exist_ok=True)
+        run_factory2(
+            host=os.getenv('CHUMA_HOST', '0.0.0.0'),
+            port=int(os.getenv('PORT', os.getenv('CHUMA_PORT', '8097'))),
+            db=os.getenv('DATABASE_URL') or str(data_dir / 'factory2.db'),
+            media_root=os.getenv('CHUMA_MEDIA_DIR', str(data_dir / 'media')),
+        )
+        raise SystemExit(0)
+
     policy = BudgetPolicy.from_env()
     hf_token = os.getenv('HF_TOKEN')
     hf_cost_class = 'free-credit'
