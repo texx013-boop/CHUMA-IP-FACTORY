@@ -2,6 +2,8 @@
 
 Date: 2026-10-08
 Current release: 0.1.0
+
+Latest verified commit: 87cbfa306334d1d1619c5ee5d5ab5be547011244
 Main branch: main
 Current commit: 8bddfc4beeadb6cc93faebbfb6588632e8ca615f
 
