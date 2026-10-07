@@ -63,3 +63,14 @@ Owner should ultimately need only: login → connect approved services → optio
 - Added regression coverage for measured growth learning and protection against placeholder metrics influencing decisions.
 - Code commits: `328d5def7249f4b7f5e6da49f4f3f8ea61ba4901`, tests `f09f1a9864d8f0be3ebee61cb69d7fba0f854210`.
 - External social publishing remains disabled/fail-closed; this block is an internal integration test contour only.
+
+
+## 2026-10-07 — Compliance Core
+- Added configurable `gf_compliance_rules` registry with platform/action/jurisdiction scope.
+- Unknown or expired rules remain **YELLOW / OWNER_REVIEW** by default.
+- GREEN is never inferred from API availability; automation must be explicitly allowed by a current rule.
+- RED remains non-automatable.
+- Added owner-controlled compliance update API and regression coverage.
+- Social credentials/passwords remain unsupported; connection remains OAuth/API only.
+- This registry is an operational control layer, not a legal guarantee; current jurisdiction-specific rules must be reviewed before enabling automation.
+- Latest code/test commits: `ca3cda6e18241900e20cd4ded0ea22939b2a307a`, `303f7e9a03c21a78ffa22c484978b559b9387636`, `1d0c17ffb9c616e5d7c69eb206e0d518d24c88b4`.
