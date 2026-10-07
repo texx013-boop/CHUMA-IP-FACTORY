@@ -108,9 +108,21 @@ class Factory2:
                     str(idea.get("caption") or "").strip(),
                     str(idea.get("hook") or "").strip()]
         publish_text=next((x for x in text_parts if x), "")
+        artifact=self.chuma.store.one(
+            "SELECT artifact_id,variant,mime_type,storage_path,content_hash,provider,status "
+            "FROM artifacts WHERE owner_id=? AND content_id=? AND status='READY' "
+            "ORDER BY CASE WHEN variant='4:5' THEN 0 WHEN variant='1:1' THEN 1 ELSE 2 END, created_at DESC LIMIT 1",
+            (owner,row["content_id"]))
+        if not artifact:
+            self.db.execute("UPDATE gf_distributions SET state='FAILED',result_json=?,updated_at=? WHERE id=?",
+                            (json.dumps({"error":"content_artifact_missing"},ensure_ascii=False),now(),distribution_id))
+            self.commit()
+            raise ExternalProviderError("content_artifact_missing")
+        artifact_payload={k:artifact[k] for k in ("artifact_id","variant","mime_type","storage_path","content_hash","provider")}
         try:
             result=adapter.publish({"content_id":row["content_id"],"character_id":content_row["character_id"],
-                                    "text":publish_text,"account_id":connection["account_id"],
+                                    "text":publish_text,"artifact":artifact_payload,
+                                    "account_id":connection["account_id"],
                                     "credential_ref":connection["credential_ref"]})
         except Exception as exc:
             self.db.execute("UPDATE gf_distributions SET state='FAILED',result_json=?,updated_at=? WHERE id=?",
@@ -591,6 +603,18 @@ class VKOfficialAdapter(ExternalDistributionAdapter):
         text=str(payload.get("text") or "").strip()
         if not text:
             raise ExternalProviderError("text_required")
+        artifact=payload.get("artifact") or {}
+        if not artifact.get("storage_path") or not artifact.get("content_hash"):
+            raise ExternalProviderError("artifact_required")
+        if artifact.get("status") not in (None,"READY"):
+            raise ExternalProviderError("artifact_not_ready")
+        if not os.path.isfile(str(artifact["storage_path"])):
+            raise ExternalProviderError("artifact_not_found")
+        if str(artifact.get("mime_type","")).lower() not in ("image/jpeg","image/png","image/webp","image/svg+xml"):
+            raise ExternalProviderError("artifact_mime_not_supported")
+        actual=hashlib.sha256(Path(str(artifact["storage_path"])).read_bytes()).hexdigest()
+        if actual != str(artifact["content_hash"]):
+            raise ExternalProviderError("artifact_hash_mismatch")
         token=self._resolve_token(payload.get("credential_ref"))
         response=self.request("wall.post",{"owner_id":owner_id,"message":text,"from_group":1 if owner_id < 0 else 0},token)
         post_id=response.get("post_id")
