@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS gf_spend_ledger(id TEXT PRIMARY KEY, owner_id TEXT NO
 CREATE TABLE IF NOT EXISTS gf_notifications(id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, level TEXT NOT NULL, kind TEXT NOT NULL, title TEXT NOT NULL, detail TEXT NOT NULL, acknowledged INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS gf_attention(id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, character_id TEXT, priority INTEGER NOT NULL, kind TEXT NOT NULL, title TEXT NOT NULL, detail TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'OPEN', created_at INTEGER NOT NULL, resolved_at INTEGER);
 CREATE TABLE IF NOT EXISTS gf_compliance_rules(id TEXT PRIMARY KEY, platform TEXT NOT NULL, action TEXT NOT NULL, jurisdiction TEXT NOT NULL, legal_class TEXT NOT NULL, automation_allowed INTEGER NOT NULL DEFAULT 0, source TEXT NOT NULL, note TEXT NOT NULL, reviewed_at INTEGER NOT NULL, expires_at INTEGER, UNIQUE(platform,action,jurisdiction));
+CREATE TABLE IF NOT EXISTS gf_distributions(id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, experiment_id TEXT, content_id TEXT NOT NULL, platform TEXT NOT NULL, state TEXT NOT NULL, idempotency_key TEXT NOT NULL UNIQUE, provider TEXT NOT NULL, account_id TEXT, credential_ref TEXT, provenance_json TEXT NOT NULL, result_json TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
 """
 
 def now(): return int(time.time())
@@ -34,8 +35,89 @@ class Factory2:
         self.db = sqlite3.connect(self.path, check_same_thread=False)
         self.db.row_factory = sqlite3.Row
         self.db.executescript(SCHEMA)
+        self._migrate_schema()
         self.db.commit()
         self.chuma = CHUMA(self.path, media_root)
+    def _migrate_schema(self):
+        cols={r["name"] for r in self.all("PRAGMA table_info(gf_platforms)")}
+        if "account_id" not in cols:
+            self.db.execute("ALTER TABLE gf_platforms ADD COLUMN account_id TEXT")
+        if "credential_ref" not in cols:
+            self.db.execute("ALTER TABLE gf_platforms ADD COLUMN credential_ref TEXT")
+
+    def _platform_connection(self, owner, platform):
+        return self.one("SELECT * FROM gf_platforms WHERE owner_id=? AND platform=? ORDER BY updated_at DESC LIMIT 1",
+                        (owner, str(platform).strip().lower()))
+
+    def distribution_adapter(self, platform):
+        return ExternalDistributionAdapter(str(platform).strip().lower())
+
+    def prepare_distribution(self, owner, content_id, platform, experiment_id=None):
+        platform=str(platform or "").strip().lower()
+        if not platform or not content_id: raise ValueError("invalid_distribution")
+        compliance=self.compliance_status(platform,"publish","RU")
+        connection=self._platform_connection(owner,platform)
+        if compliance["legal_class"]!="GREEN" or not compliance["automation_allowed"]:
+            state="BLOCKED_COMPLIANCE"
+        elif not connection or connection["status"]!="READY":
+            state="BLOCKED_AUTH"
+        else:
+            state="QUEUED"
+        key=f"dist:{owner}:{content_id}:{platform}"
+        existing=self.one("SELECT * FROM gf_distributions WHERE idempotency_key=?",(key,))
+        if existing: return dict(existing)
+        provenance={"content_id":content_id,"experiment_id":experiment_id,"platform":platform,
+                    "compliance":compliance,"connection_method":"OAUTH/API"}
+        did=uid("DIST")
+        self.db.execute("""INSERT INTO gf_distributions
+            (id,owner_id,experiment_id,content_id,platform,state,idempotency_key,provider,account_id,credential_ref,provenance_json,result_json,created_at,updated_at)
+            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (did,owner,experiment_id,content_id,platform,state,key,platform,
+             connection["account_id"] if connection else None,
+             connection["credential_ref"] if connection else None,
+             json.dumps(provenance,ensure_ascii=False),json.dumps({},ensure_ascii=False),now(),now()))
+        self.commit()
+        self.event(owner,"DISTRIBUTION_PREPARED",{"distribution_id":did,"platform":platform,"state":state})
+        return dict(self.one("SELECT * FROM gf_distributions WHERE id=?",(did,)))
+
+    def submit_distribution(self, owner, distribution_id):
+        row=self.one("SELECT * FROM gf_distributions WHERE id=? AND owner_id=?",(distribution_id,owner))
+        if not row: raise ValueError("distribution_not_found")
+        if row["state"]=="PUBLISHED": return dict(row)
+        if row["state"]!="QUEUED": return dict(row)
+        compliance=self.compliance_status(row["platform"],"publish","RU")
+        connection=self._platform_connection(owner,row["platform"])
+        if compliance["legal_class"]!="GREEN" or not compliance["automation_allowed"]:
+            self.db.execute("UPDATE gf_distributions SET state='BLOCKED_COMPLIANCE',updated_at=? WHERE id=?",(now(),distribution_id)); self.commit()
+            raise ValueError("distribution_blocked_compliance")
+        if not connection or connection["status"]!="READY" or not connection["credential_ref"]:
+            self.db.execute("UPDATE gf_distributions SET state='BLOCKED_AUTH',updated_at=? WHERE id=?",(now(),distribution_id)); self.commit()
+            raise ValueError("distribution_blocked_auth")
+        result=self.distribution_adapter(row["platform"]).publish({"content_id":row["content_id"],"account_id":connection["account_id"],"credential_ref":connection["credential_ref"]})
+        self.db.execute("UPDATE gf_distributions SET state=?,result_json=?,updated_at=? WHERE id=?",
+                        (result["state"],json.dumps(result,ensure_ascii=False),now(),distribution_id))
+        self.commit()
+        return dict(self.one("SELECT * FROM gf_distributions WHERE id=?",(distribution_id,)))
+
+    def record_external_measurement(self, owner, distribution_id, metrics, confidence=0.5):
+        row=self.one("SELECT * FROM gf_distributions WHERE id=? AND owner_id=?",(distribution_id,owner))
+        if not row: raise ValueError("distribution_not_found")
+        if row["state"]!="PUBLISHED": raise ValueError("distribution_not_published")
+        exp=self.one("SELECT character_id FROM gf_experiments WHERE id=? AND owner_id=?",(row["experiment_id"],owner)) if row["experiment_id"] else None
+        if not exp: raise ValueError("experiment_not_found")
+        clean={str(k):float(v) for k,v in dict(metrics or {}).items() if isinstance(v,(int,float))}
+        for kind,value in clean.items():
+            self.record_signal(owner,exp["character_id"],kind,value,row["content_id"],confidence,"external")
+        self.db.execute("UPDATE gf_distributions SET result_json=?,updated_at=? WHERE id=?",
+                        (json.dumps({"metrics":clean,"measurement_mode":"external"},ensure_ascii=False),now(),distribution_id))
+        self.commit()
+        return {"distribution_id":distribution_id,"measurement_mode":"external","metrics":clean}
+
+class ExternalDistributionAdapter:
+    def __init__(self, platform): self.platform=platform
+    def publish(self, payload):
+        return {"state":"SUBMITTED","provider":self.platform,"mode":"adapter_stub","external_id":None}
+
     def close(self):
         self.chuma.store.close()
         self.db.close()
@@ -360,7 +442,7 @@ class Factory2:
         status="READY" if legal=="GREEN" and compliance["automation_allowed"] else "OWNER_REVIEW"
         note=("Official API/OAuth connection required; current compliance rule permits automation."
               if status=="READY" else compliance["note"])
-        self.db.execute("INSERT OR REPLACE INTO gf_platforms(id,owner_id,platform,status,connection_method,legal_class,note,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)",
-            (uid("PLAT"),owner,platform,status,"OAUTH/API",legal,note,now(),now()))
+        self.db.execute("INSERT OR REPLACE INTO gf_platforms(id,owner_id,platform,status,connection_method,legal_class,note,created_at,updated_at,account_id,credential_ref) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+            (uid("PLAT"),owner,platform,status,"OAUTH/API",legal,note,now(),now(),None,None))
         self.commit(); self.event(owner,"PLATFORM_REGISTERED",{"platform":platform,"legal_class":legal,"status":status})
         return {"platform":platform,"status":status,"legal_class":legal,"connection_method":"OAUTH/API","note":note}
