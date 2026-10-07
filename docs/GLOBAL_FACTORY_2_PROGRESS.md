@@ -187,3 +187,15 @@ Checkpoint: `76c0991a449b108d1a335149ca021843117d083c`
 - This creates defense in depth: Factory 2 validates the artifact and the concrete VK provider validates it again immediately before upload.
 - No provider is allowed to receive an unverified image.
 - No live publication or production smoke test is claimed; current workflow-run visibility does not provide a CI result for these push commits.
+
+
+## 2026-10-08 — External publication concurrency hardening
+
+Checkpoint: `e05a309a2528dc334820e7475f5bf60e09741a81`
+
+- Added an atomic `PUBLISHING` claim before invoking an external provider.
+- A second concurrent submit for the same distribution can no longer start another provider publication while the first claim is active.
+- Existing idempotency keys remain the persistent duplication guard.
+- Provider/content/artifact failures remain fail-closed and transition the distribution to `FAILED`.
+- Added regression coverage for the concurrent-submit claim boundary.
+- This is source-level hardening; no live provider call or production smoke test is claimed.
