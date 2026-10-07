@@ -18,6 +18,8 @@ CREATE TABLE IF NOT EXISTS gf_signals(id TEXT PRIMARY KEY, owner_id TEXT NOT NUL
 CREATE TABLE IF NOT EXISTS gf_decisions(id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, character_id TEXT, problem TEXT NOT NULL, decision TEXT NOT NULL, evidence_json TEXT NOT NULL, lesson TEXT NOT NULL, created_at INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS gf_ip_health(character_id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, identity REAL NOT NULL, content REAL NOT NULL, audience REAL NOT NULL, learning REAL NOT NULL, economics REAL NOT NULL, total REAL NOT NULL, updated_at INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS gf_sessions(token TEXT PRIMARY KEY, owner_id TEXT NOT NULL, expires_at INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS gf_spend_ledger(id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, category TEXT NOT NULL, amount REAL NOT NULL, ip_id TEXT, approved INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL, note TEXT NOT NULL, created_at INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS gf_notifications(id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, level TEXT NOT NULL, kind TEXT NOT NULL, title TEXT NOT NULL, detail TEXT NOT NULL, acknowledged INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL);
 """
 
 def now(): return int(time.time())
@@ -88,7 +90,10 @@ class Factory2:
         return {"version":VERSION,"running":bool(settings["running"]),"safe_mode":bool(settings["safe_mode"]),"autonomy":settings["autonomy"],"growth_mode":settings["growth_mode"],"limits":{"daily":settings["daily_limit"],"monthly":settings["monthly_limit"]},"fund":{"balance":fund["balance"],"reserved":fund["reserved"],"spent":fund["spent"]},"characters":[dict(x) for x in chars],"content_count":content,"published_count":pubs,"platforms":[dict(x) for x in platforms],"events":[{"kind":x["kind"],"detail":json.loads(x["detail_json"]),"created_at":x["created_at"]} for x in events],
 "experiments":[dict(x) for x in experiments],
 "signals":[dict(x) for x in signals],
-"ip_health":[dict(x) for x in health]}
+"ip_health":[dict(x) for x in health],
+"spend_today":float(self.one("SELECT COALESCE(SUM(amount),0) n FROM gf_spend_ledger WHERE owner_id=? AND status='COMMITTED' AND created_at>=?",(owner,now()-86400))["n"]),
+"spend_month":float(self.one("SELECT COALESCE(SUM(amount),0) n FROM gf_spend_ledger WHERE owner_id=? AND status='COMMITTED' AND created_at>=?",(owner,now()-30*86400))["n"]),
+"notifications":[dict(x) for x in self.all("SELECT id,level,kind,title,detail,acknowledged,created_at FROM gf_notifications WHERE owner_id=? ORDER BY created_at DESC LIMIT 20",(owner,))]}
     def start(self, owner):
         s=self.one("SELECT * FROM gf_settings WHERE owner_id=?",(owner,))
         if s["safe_mode"]: raise ValueError("safe_mode")
@@ -105,6 +110,39 @@ class Factory2:
         self.db.execute("UPDATE gf_settings SET running=0 WHERE owner_id=?",(owner,)); self.commit(); self.event(owner,"FACTORY_PAUSED",{}); return {"paused":True}
     def stop(self, owner):
         self.db.execute("UPDATE gf_settings SET running=0,safe_mode=1 WHERE owner_id=?",(owner,)); self.commit(); self.event(owner,"EMERGENCY_STOP",{}); return {"stopped":True,"safe_mode":True}
+    def notify(self, owner, level, kind, title, detail):
+        nid=uid("NTF")
+        self.db.execute("INSERT INTO gf_notifications VALUES(?,?,?,?,?,?,?,?)",(nid,owner,level,kind,title,detail,0,now()))
+        self.commit()
+        return nid
+
+    def spend(self, owner, amount, category="growth", ip_id=None, approved=False, note=""):
+        amount=float(amount)
+        if amount<=0 or amount>100000: raise ValueError("invalid_amount")
+        settings=self.one("SELECT daily_limit,monthly_limit,safe_mode FROM gf_settings WHERE owner_id=?",(owner,))
+        if settings["safe_mode"]: raise ValueError("safe_mode")
+        fund=self.one("SELECT balance FROM gf_funds WHERE owner_id=?",(owner,))
+        today=float(self.one("SELECT COALESCE(SUM(amount),0) n FROM gf_spend_ledger WHERE owner_id=? AND status='COMMITTED' AND created_at>=?",(owner,now()-86400))["n"])
+        month=float(self.one("SELECT COALESCE(SUM(amount),0) n FROM gf_spend_ledger WHERE owner_id=? AND status='COMMITTED' AND created_at>=?",(owner,now()-30*86400))["n"])
+        if settings["daily_limit"] and today+amount>settings["daily_limit"]: raise ValueError("daily_spend_limit")
+        if settings["monthly_limit"] and month+amount>settings["monthly_limit"]: raise ValueError("monthly_spend_limit")
+        if float(fund["balance"])<amount: raise ValueError("insufficient_funds")
+        status="COMMITTED" if approved else "PENDING_APPROVAL"
+        lid=uid("SPEND")
+        self.db.execute("INSERT INTO gf_spend_ledger VALUES(?,?,?,?,?,?,?,?,?)",(lid,owner,category,amount,ip_id,1 if approved else 0,status,note,now()))
+        if approved:
+            self.db.execute("UPDATE gf_funds SET balance=balance-?,spent=spent+?,updated_at=? WHERE owner_id=?",(amount,amount,now(),owner))
+        self.commit()
+        if not approved:
+            self.notify(owner,"ACTION","SPEND_APPROVAL_REQUIRED","Требуется подтверждение расхода",f"{category}: {amount:.2f}")
+        self.event(owner,"SPEND_"+status,{"ledger_id":lid,"amount":amount,"category":category,"approved":approved})
+        return {"id":lid,"status":status,"amount":amount,"balance":self.one("SELECT balance FROM gf_funds WHERE owner_id=?",(owner,))["balance"]}
+
+    def acknowledge_notification(self, owner, notification_id):
+        self.db.execute("UPDATE gf_notifications SET acknowledged=1 WHERE id=? AND owner_id=?",(notification_id,owner))
+        self.commit()
+        return True
+
     def fund(self, owner, amount):
         amount=float(amount)
         if amount<=0 or amount>100000: raise ValueError("invalid_amount")
