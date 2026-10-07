@@ -1,5 +1,8 @@
 import tempfile
 import os
+import hashlib
+import json
+import time
 from pathlib import Path
 from chuma_ip_factory.global_factory_2 import Factory2, VERSION, ExternalProviderError
 
@@ -377,4 +380,113 @@ def test_factory2_distribution_requires_verified_artifact_before_provider_publis
             assert False
         except ExternalProviderError as exc:
             assert str(exc)=="content_not_found"
+        f.close()
+
+
+def test_factory2_vk_image_sequence_uses_verified_artifact_and_attachment():
+    with tempfile.TemporaryDirectory() as td:
+        f=Factory2(Path(td)/"factory.db", Path(td)/"media")
+        owner=f.create_owner("owner","password123")
+        cid=f.bootstrap_character(owner,"Test IP")
+        eid=f.create_experiment(owner,cid,"vk image")
+        f.set_compliance_rule(owner,"vk","publish","RU","GREEN",True,source="test",note="provider contract")
+        f.connect_platform(owner,"vk",account_id="-42",credential_ref="oauth://vk/test")
+        content_id="content-vk-image"
+        f.chuma.store.db.execute(
+            "INSERT INTO content VALUES(?,?,?,?,?,?,?,?,?)",
+            (content_id,owner,cid,json.dumps({"text":"hello VK"}), "READY",
+             json.dumps({}),json.dumps({"test":True}),int(time.time()),int(time.time())))
+        image=Path(td)/"verified.png"
+        raw=b"\x89PNG\\r\\nverified-test-image"
+        image.write_bytes(raw)
+        digest=hashlib.sha256(raw).hexdigest()
+        f.chuma.store.db.execute(
+            "INSERT INTO artifacts VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+            ("ART-vk",owner,cid,content_id,"ASSET-vk","4:5","image/png",
+             str(image),digest,"test-provider","READY",int(time.time())))
+        f.chuma.store.commit()
+        d=f.prepare_distribution(owner,content_id,"vk",experiment_id=eid)
+        assert d["state"]=="QUEUED"
+
+        adapter=f.distribution_adapter("vk")
+        ref="oauth://vk/test"
+        env_name=adapter._secret_env_name(ref)
+        os.environ[env_name]="test-token"
+        calls=[]
+        def fake_request(method, params, token):
+            calls.append((method,dict(params),token))
+            if method=="photos.getWallUploadServer":
+                return {"upload_url":"https://upload.example/vk","user_id":7}
+            if method=="photos.saveWallPhoto":
+                return [{"id":55,"owner_id":-42}]
+            if method=="wall.post":
+                assert params["attachments"]=="photo-42_55"
+                return {"post_id":123}
+            raise AssertionError(method)
+        adapter.request=fake_request
+        adapter.upload_multipart=lambda url,path,mime: {"server":1,"photo":"[]","hash":"upload-hash"}
+
+        published=f.submit_distribution(owner,d["id"])
+        assert published["state"]=="PUBLISHED"
+        result=json.loads(published["result_json"])
+        assert result["photo_id"]==55
+        assert result["attachment"]=="photo-42_55"
+        assert result["provenance"]["artifact_hash"]==digest
+        assert [x[0] for x in calls]==[
+            "photos.getWallUploadServer","photos.saveWallPhoto","wall.post"]
+        assert all(x[2]=="test-token" for x in calls)
+        del os.environ[env_name]
+        f.close()
+
+
+def test_factory2_vk_artifact_tamper_fails_before_provider_calls():
+    with tempfile.TemporaryDirectory() as td:
+        f=Factory2(Path(td)/"factory.db", Path(td)/"media")
+        owner=f.create_owner("owner","password123")
+        cid=f.bootstrap_character(owner,"Test IP")
+        f.set_compliance_rule(owner,"vk","publish","RU","GREEN",True,source="test",note="provider contract")
+        f.connect_platform(owner,"vk",account_id="-42",credential_ref="oauth://vk/test")
+        content_id="content-tampered"
+        f.chuma.store.db.execute(
+            "INSERT INTO content VALUES(?,?,?,?,?,?,?,?,?)",
+            (content_id,owner,cid,json.dumps({"text":"hello"}), "READY",
+             json.dumps({}),json.dumps({"test":True}),int(time.time()),int(time.time())))
+        image=Path(td)/"tampered.png"
+        image.write_bytes(b"not-the-hash")
+        f.chuma.store.db.execute(
+            "INSERT INTO artifacts VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+            ("ART-tamper",owner,cid,content_id,"ASSET-t","4:5","image/png",
+             str(image),"0"*64,"test-provider","READY",int(time.time())))
+        f.chuma.store.commit()
+        d=f.prepare_distribution(owner,content_id,"vk")
+        adapter=f.distribution_adapter("vk")
+        adapter.request=lambda *args,**kwargs: (_ for _ in ()).throw(AssertionError("provider must not be called"))
+        try:
+            f.submit_distribution(owner,d["id"])
+            assert False
+        except ExternalProviderError as exc:
+            assert str(exc)=="artifact_hash_mismatch"
+        assert f.one("SELECT state FROM gf_distributions WHERE id=?",(d["id"],))["state"]=="FAILED"
+        f.close()
+
+
+def test_factory2_vk_missing_artifact_fails_closed_after_content_exists():
+    with tempfile.TemporaryDirectory() as td:
+        f=Factory2(Path(td)/"factory.db", Path(td)/"media")
+        owner=f.create_owner("owner","password123")
+        cid=f.bootstrap_character(owner,"Test IP")
+        f.set_compliance_rule(owner,"vk","publish","RU","GREEN",True,source="test",note="provider contract")
+        f.connect_platform(owner,"vk",account_id="-42",credential_ref="oauth://vk/test")
+        content_id="content-no-artifact"
+        f.chuma.store.db.execute(
+            "INSERT INTO content VALUES(?,?,?,?,?,?,?,?,?)",
+            (content_id,owner,cid,json.dumps({"text":"hello"}), "READY",
+             json.dumps({}),json.dumps({"test":True}),int(time.time()),int(time.time())))
+        f.chuma.store.commit()
+        d=f.prepare_distribution(owner,content_id,"vk")
+        try:
+            f.submit_distribution(owner,d["id"])
+            assert False
+        except ExternalProviderError as exc:
+            assert str(exc)=="content_artifact_missing"
         f.close()
