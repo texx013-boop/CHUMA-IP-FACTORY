@@ -20,7 +20,10 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(b)
     def owner(self):
         v=self.headers.get("Authorization","")
-        return self.service.owner_from_token(v[7:].strip()) if v.startswith("Bearer ") else None
+        if len(v)>4096 or not v.startswith("Bearer "): return None
+        token=v[7:].strip()
+        if not token or len(token)>512: return None
+        return self.service.owner_from_token(token)
     def body(self):
         try:
             n=int(self.headers.get("Content-Length","0"))
@@ -29,8 +32,8 @@ class Handler(BaseHTTPRequestHandler):
         if n < 0: raise ValueError("invalid_content_length")
         if n>1024*1024: raise ValueError("payload_too_large")
         try:
-            data=json.loads(self.rfile.read(n) or "{}")
-        except json.JSONDecodeError as exc:
+            data=json.loads(self.rfile.read(n) or "{}", parse_constant=lambda value: (_ for _ in ()).throw(ValueError("invalid_json")))
+        except (json.JSONDecodeError, ValueError) as exc:
             raise ValueError("invalid_json") from exc
         if not isinstance(data,dict):
             raise ValueError("invalid_json")
@@ -52,7 +55,7 @@ class Handler(BaseHTTPRequestHandler):
         try:
             data=self.body()
             if p=="/factory2/api/register":
-                if len(data.get("username",""))<3 or len(data.get("password",""))<8: return self.json(400,{"error":"invalid_credentials","message":"Логин минимум 3 символа, пароль минимум 8."})
+                if not isinstance(data.get("username",""),str) or not isinstance(data.get("password",""),str) or len(data.get("username",""))<3 or len(data.get("username",""))>128 or len(data.get("password",""))<8 or len(data.get("password",""))>256: return self.json(400,{"error":"invalid_credentials","message":"Логин минимум 3 символа, пароль минимум 8."})
                 o=self.service.create_owner(data["username"],data["password"]); return self.json(201,{"token":self.service.session(o)})
             if p=="/factory2/api/login":
                 username=str(data.get("username","")).strip()

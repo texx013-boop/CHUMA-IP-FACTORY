@@ -549,3 +549,36 @@ def test_factory2_http_body_rejects_malformed_json():
         assert False
     except ValueError as exc:
         assert str(exc)=="invalid_json"
+
+
+def test_factory2_http_body_rejects_non_finite_json_constants():
+    from io import BytesIO
+    from chuma_ip_factory.factory2_server import Handler
+    h=object.__new__(Handler); h.headers={"Content-Length":"3"}; h.rfile=BytesIO(b"NaN")
+    try: h.body(); assert False
+    except ValueError as exc: assert str(exc)=="invalid_json"
+
+def test_factory2_http_owner_rejects_oversized_bearer_header():
+    from chuma_ip_factory.factory2_server import Handler
+    h=object.__new__(Handler); h.headers={"Authorization":"Bearer "+"x"*5000}; h.service=object()
+    assert h.owner() is None
+
+def test_factory2_vk_upload_url_must_be_https_vk_host():
+    with tempfile.TemporaryDirectory() as td:
+        f=Factory2(Path(td)/"factory.db",Path(td)/"media"); a=f.distribution_adapter("vk")
+        ref="oauth://vk/upload-test"; env=a._secret_env_name(ref); os.environ[env]="test-token"
+        a.request=lambda *args,**kwargs: {"upload_url":"https://example.invalid/upload","user_id":7}
+        p=Path(td)/"x.png"; p.write_bytes(b"x")
+        try:
+            a.publish({"account_id":"-42","credential_ref":ref,"text":"hello","artifact":{"storage_path":str(p),"content_hash":hashlib.sha256(b"x").hexdigest(),"status":"READY","mime_type":"image/png"}})
+            assert False
+        except ExternalProviderError as exc: assert str(exc)=="provider_upload_url_invalid"
+        del os.environ[env]; f.close()
+
+def test_factory2_spend_rejects_non_finite_amount():
+    with tempfile.TemporaryDirectory() as td:
+        f=Factory2(Path(td)/"factory.db",Path(td)/"media"); owner=f.create_owner("owner","password123"); f.fund(owner,100)
+        for value in ("nan","inf","-inf"):
+            try: f.spend(owner,value); assert False
+            except ValueError as exc: assert str(exc)=="invalid_amount"
+        f.close()

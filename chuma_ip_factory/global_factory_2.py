@@ -1,5 +1,5 @@
 from __future__ import annotations
-import hashlib, json, os, secrets, sqlite3, time, uuid, mimetypes
+import hashlib, json, os, secrets, sqlite3, time, uuid, mimetypes, math
 from pathlib import Path
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import urlsplit
@@ -57,9 +57,14 @@ class Factory2:
         path=Path(str(artifact["storage_path"] or ""))
         if not path.is_file():
             raise ExternalProviderError("artifact_not_found")
-        if not artifact["content_hash"]:
-            raise ExternalProviderError("artifact_hash_missing")
-        actual=hashlib.sha256(path.read_bytes()).hexdigest()
+        if not artifact["content_hash"]: raise ExternalProviderError("artifact_hash_missing")
+        try: size=path.stat().st_size
+        except OSError as exc: raise ExternalProviderError("artifact_not_found") from exc
+        if size>25*1024*1024: raise ExternalProviderError("artifact_too_large")
+        digest=hashlib.sha256()
+        with path.open("rb") as fh:
+            for chunk in iter(lambda: fh.read(1024*1024), b""): digest.update(chunk)
+        actual=digest.hexdigest()
         if actual != str(artifact["content_hash"]):
             raise ExternalProviderError("artifact_hash_mismatch")
         return {k:artifact[k] for k in ("artifact_id","variant","mime_type","storage_path","content_hash","provider","status")}
@@ -174,7 +179,9 @@ class Factory2:
         if row["state"]!="PUBLISHED": raise ValueError("distribution_not_published")
         exp=self.one("SELECT character_id FROM gf_experiments WHERE id=? AND owner_id=?",(row["experiment_id"],owner)) if row["experiment_id"] else None
         if not exp: raise ValueError("experiment_not_found")
-        clean={str(k):float(v) for k,v in dict(metrics or {}).items() if isinstance(v,(int,float))}
+        clean={}
+        for k,v in dict(metrics or {}).items():
+            if isinstance(v,(int,float)) and math.isfinite(float(v)): clean[str(k)]=float(v)
         for kind,value in clean.items():
             self.record_signal(owner,exp["character_id"],kind,value,row["content_id"],confidence,"external")
         self.db.execute("UPDATE gf_distributions SET result_json=?,updated_at=? WHERE id=?",
@@ -363,7 +370,7 @@ class Factory2:
 
     def spend(self, owner, amount, category="growth", ip_id=None, approved=False, note=""):
         amount=float(amount)
-        if amount<=0 or amount>100000: raise ValueError("invalid_amount")
+        if not math.isfinite(amount) or amount<=0 or amount>100000: raise ValueError("invalid_amount")
         settings=self.one("SELECT daily_limit,monthly_limit,safe_mode FROM gf_settings WHERE owner_id=?",(owner,))
         if settings["safe_mode"]: raise ValueError("safe_mode")
         fund=self.one("SELECT balance FROM gf_funds WHERE owner_id=?",(owner,))
@@ -662,14 +669,25 @@ class VKOfficialAdapter(ExternalDistributionAdapter):
         mime=str(artifact.get("mime_type","")).lower()
         if mime not in ("image/jpeg","image/png","image/webp"):
             raise ExternalProviderError("artifact_mime_not_supported")
-        actual=hashlib.sha256(Path(str(artifact["storage_path"])).read_bytes()).hexdigest()
+        artifact_path=Path(str(artifact["storage_path"]))
+        try:
+            if artifact_path.stat().st_size>25*1024*1024: raise ExternalProviderError("artifact_too_large")
+        except OSError as exc: raise ExternalProviderError("artifact_not_found") from exc
+        digest=hashlib.sha256()
+        with artifact_path.open("rb") as fh:
+            for chunk in iter(lambda: fh.read(1024*1024), b""): digest.update(chunk)
+        actual=digest.hexdigest()
         if actual != str(artifact["content_hash"]):
             raise ExternalProviderError("artifact_hash_mismatch")
         token=self._resolve_token(payload.get("credential_ref"))
 
         upload_server=self.request("photos.getWallUploadServer",{"owner_id":owner_id},token)
         upload_url=upload_server.get("upload_url")
-        if not upload_url:
+        if not upload_url: raise ExternalProviderError("provider_upload_url_missing")
+        parsed=__import__("urllib.parse",fromlist=["urlparse"]).urlparse(str(upload_url))
+        host=(parsed.hostname or "").lower()
+        if parsed.scheme!="https" or not host or not (host=="vk.com" or host.endswith(".vk.com")):
+            raise ExternalProviderError("provider_upload_url_invalid")
             raise ExternalProviderError("provider_upload_url_missing")
         uploaded=self.upload_multipart(upload_url,artifact["storage_path"],mime)
 

@@ -231,3 +231,16 @@ Checkpoint after the previous owner-session hardening sequence.
 - Added regression tests for non-object and malformed JSON payloads.
 - Source and tests are saved on `main`.
 - Full CI execution and live server verification are still not claimed until an actual workflow run or reachable production environment confirms them.
+
+
+## 2026-10-08 — Production hardening consolidation
+
+Checkpoint after the autonomous hardening pass from `f0952d69e515e36dd80dcdeac718013aaccfe4c0`.
+
+- Bounded bearer authentication input and registration credential lengths.
+- Rejected non-standard JSON numeric constants such as NaN/Infinity at the HTTP boundary.
+- Growth Fund spending rejects non-finite amounts; external measurements ignore non-finite metrics.
+- Verified publication artifacts are limited to 25 MiB and hashed in bounded streaming chunks.
+- VK upload URLs are restricted to HTTPS hosts under `vk.com`.
+- Added regression coverage for these boundaries.
+- CI PASS and live production/server smoke verification remain unclaimed until actually observed.
