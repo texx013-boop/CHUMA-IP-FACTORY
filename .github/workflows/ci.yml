@@ -132,7 +132,7 @@ jobs:
           for unit in chuma-agent.service chuma-auto-update.service chuma-watchdog.service chuma-security-agent.service chuma-backup.service chuma-backup.timer; do
             test -f "infra/$unit"
           done
-          grep -q "git@github.com:texx013-boop/CHUMA-IP-FACTORY.git" infra/auto-update.sh
+          grep -q "https://github.com/texx013-boop/CHUMA-IP-FACTORY.git" infra/auto-update.sh
           grep -q 'git -C "\$TMP/repo" archive --format=tar HEAD' infra/auto-update.sh
           grep -q 'release archive fallback succeeded' infra/auto-update.sh
           grep -q 'release archive fallback failed' infra/auto-update.sh
