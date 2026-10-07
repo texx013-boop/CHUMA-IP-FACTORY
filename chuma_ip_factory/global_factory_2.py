@@ -78,7 +78,13 @@ class Factory2:
         events=self.all("SELECT kind,detail_json,created_at FROM gf_events WHERE owner_id=? ORDER BY created_at DESC LIMIT 12",(owner,))
         content=self.one("SELECT COUNT(*) n FROM content WHERE owner_id=?",(owner,))["n"]
         pubs=self.one("SELECT COUNT(*) n FROM publications WHERE owner_id=? AND status='PUBLISHED'",(owner,))["n"]
-        return {"version":VERSION,"running":bool(settings["running"]),"safe_mode":bool(settings["safe_mode"]),"autonomy":settings["autonomy"],"growth_mode":settings["growth_mode"],"limits":{"daily":settings["daily_limit"],"monthly":settings["monthly_limit"]},"fund":{"balance":fund["balance"],"reserved":fund["reserved"],"spent":fund["spent"]},"characters":[dict(x) for x in chars],"content_count":content,"published_count":pubs,"platforms":[dict(x) for x in platforms],"events":[{"kind":x["kind"],"detail":json.loads(x["detail_json"]),"created_at":x["created_at"]} for x in events]}
+        experiments=self.all("SELECT id,character_id,hypothesis,status,target_signal,content_id,result_json,created_at,updated_at FROM gf_experiments WHERE owner_id=? ORDER BY created_at DESC LIMIT 20",(owner,))
+        signals=self.all("SELECT id,character_id,content_id,kind,value,confidence,source,created_at FROM gf_signals WHERE owner_id=? ORDER BY created_at DESC LIMIT 30",(owner,))
+        health=self.all("SELECT * FROM gf_ip_health WHERE owner_id=? ORDER BY total DESC",(owner,))
+        return {"version":VERSION,"running":bool(settings["running"]),"safe_mode":bool(settings["safe_mode"]),"autonomy":settings["autonomy"],"growth_mode":settings["growth_mode"],"limits":{"daily":settings["daily_limit"],"monthly":settings["monthly_limit"]},"fund":{"balance":fund["balance"],"reserved":fund["reserved"],"spent":fund["spent"]},"characters":[dict(x) for x in chars],"content_count":content,"published_count":pubs,"platforms":[dict(x) for x in platforms],"events":[{"kind":x["kind"],"detail":json.loads(x["detail_json"]),"created_at":x["created_at"]} for x in events],
+"experiments":[dict(x) for x in experiments],
+"signals":[dict(x) for x in signals],
+"ip_health":[dict(x) for x in health]}
     def start(self, owner):
         s=self.one("SELECT * FROM gf_settings WHERE owner_id=?",(owner,))
         if s["safe_mode"]: raise ValueError("safe_mode")
