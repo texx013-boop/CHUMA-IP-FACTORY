@@ -104,3 +104,11 @@ Owner should ultimately need only: login → connect approved services → optio
 - Added regression coverage proving the fallback adapter cannot produce an external ID or real publication.
 - Latest code/test commits: `ae87784209a2d32091472711cf308ee2723df58e`, `3bd21a1e597ef9924623a87380e9ecacf6741cad`.
 - Real server deployment was not attempted because the connected remote device was unavailable and the execution environment has no outbound network access.
+
+
+## 2026-10-08 — Owner Authentication Hardening
+- Added persistent login guard with five-failure lockout for the Factory 2 owner login endpoint.
+- Lock state survives process restarts because it is stored in `gf_auth_guard`.
+- Successful authentication clears the guard state.
+- Added regression coverage for lockout and reset behavior.
+- Latest code/test commits: `c3aff1c9727f5e8d2ac06f34ceed024ee1794282`, `9f8d64ef15b22ab5fb7bb9236022659d1576b6ed`, `b2a8a89a136cd00e7d9be8ffd5df6f89ee8772ea`.
