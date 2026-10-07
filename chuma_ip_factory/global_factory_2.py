@@ -150,7 +150,7 @@ class Factory2:
         economics=0.0
         total=round(identity*.20+content_score*.20+audience_score*.25+learning*.20+economics*.15,2)
         t=now()
-        self.db.execute("INSERT OR REPLACE INTO gf_ip_health VALUES(?,?,?,?,?,?,?,?)",(character_id,owner,identity,content_score,audience_score,learning,economics,total,t))
+        self.db.execute("INSERT OR REPLACE INTO gf_ip_health VALUES(?,?,?,?,?,?,?,?,?)",(character_id,owner,identity,content_score,audience_score,learning,economics,total,t))
         self.commit()
         return dict(self.one("SELECT * FROM gf_ip_health WHERE character_id=?",(character_id,)))
 
