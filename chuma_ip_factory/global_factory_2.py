@@ -433,7 +433,7 @@ class ExternalDistributionAdapter:
                                                     "jurisdiction":jurisdiction,"legal_class":legal_class})
         return self.compliance_status(platform,action,jurisdiction)
 
-    def connect_platform(self, owner, platform):
+    def connect_platform(self, owner, platform, account_id=None, credential_ref=None):
         platform=str(platform or "").strip().lower()
         if not platform or len(platform)>100:
             raise ValueError("invalid_platform")
@@ -443,6 +443,6 @@ class ExternalDistributionAdapter:
         note=("Official API/OAuth connection required; current compliance rule permits automation."
               if status=="READY" else compliance["note"])
         self.db.execute("INSERT OR REPLACE INTO gf_platforms(id,owner_id,platform,status,connection_method,legal_class,note,created_at,updated_at,account_id,credential_ref) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
-            (uid("PLAT"),owner,platform,status,"OAUTH/API",legal,note,now(),now(),None,None))
+            (uid("PLAT"),owner,platform,status,"OAUTH/API",legal,note,now(),now(),str(account_id) if account_id else None,str(credential_ref) if credential_ref else None))
         self.commit(); self.event(owner,"PLATFORM_REGISTERED",{"platform":platform,"legal_class":legal,"status":status})
         return {"platform":platform,"status":status,"legal_class":legal,"connection_method":"OAUTH/API","note":note}
