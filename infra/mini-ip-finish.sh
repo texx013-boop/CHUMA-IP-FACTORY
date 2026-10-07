@@ -71,7 +71,13 @@ PUBLIC_HTTP="$(curl -sS -o /dev/null -w "%{http_code}" --connect-timeout 5 --max
 echo "External HTTP probe: ${PUBLIC_HTTP:-failed}"
 echo "[8/8] Проверка после перезапуска..."
 docker compose restart
-sleep 5
+for i in $(seq 1 60); do
+  if docker compose exec -T app python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8097/health', timeout=3)" >/dev/null 2>&1 && \
+     docker compose exec -T app python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8097/ready', timeout=3)" >/dev/null 2>&1; then
+    break
+  fi
+  sleep 2
+done
 docker compose exec -T app python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8097/health', timeout=5)"
 docker compose exec -T app python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8097/ready', timeout=5)"
 curl -fsS --max-time 10 -H "Host: $CADDY_HOST" http://127.0.0.1/health >/dev/null
