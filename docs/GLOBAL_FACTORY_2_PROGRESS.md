@@ -144,3 +144,12 @@ Owner should ultimately need only: login → connect approved services → optio
 - **VK automation is not enabled by default.** Compliance remains YELLOW until an owner-reviewed current rule explicitly permits the required action in the relevant jurisdiction.
 - This block does not claim a real publication or live VK smoke test; no production token was used and the execution environment still has no outbound network access.
 - Source checkpoints: 92910f11ed153ff7292c5c8bb0e9da0e98b2014f, b1c4ba47d066e8474ecd22e1ef87c5999388cd59, 1a04d869e0fafa900de79a76388551944e199eae, 222330a874b29e5bc42d4bb773b493fd53dc793b, 88527b65d9331a308dea244147a68338995ffb42.
+
+
+## 2026-10-08 — Verified artifact gate for external publication
+- Strengthened the external distribution boundary so a provider receives a verified Factory 2 artifact, not an abstract content id only.
+- Before provider publication, Factory 2 now selects a READY image artifact, checks its storage path, MIME type and SHA-256 content hash, and fails closed on missing/not-ready/tampered/unsupported artifacts.
+- The provider payload now carries artifact provenance (`artifact_id`, variant, MIME type, storage path, content hash, provider).
+- Added regression coverage for the publication artifact boundary.
+- This intentionally does **not** claim that VK image upload itself is complete yet: the next block is the official VK photo-upload sequence (`photos.getWallUploadServer` → upload → `photos.saveWallPhoto` → `wall.post`) followed by mocked integration tests.
+- Saved checkpoint: `31f6e05673f50166dcebb10da915d88ca0cf221f`, tests `2713778c7289130a0111df4c24a7ed423199b828`.
