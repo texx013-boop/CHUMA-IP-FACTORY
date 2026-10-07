@@ -62,7 +62,11 @@ class Factory2:
         check=hashlib.pbkdf2_hmac("sha256",password.encode(),salt.encode(),180000).hex()
         return row["owner_id"] if hmac.compare_digest(check,digest) else None
     def session(self, owner):
-        token=secrets.token_urlsafe(32); self.db.execute("INSERT INTO gf_sessions VALUES(?,?,?)",(token,owner,now()+86400)); self.commit(); return token
+        self.db.execute("DELETE FROM gf_sessions WHERE expires_at<=?",(now(),))
+        token=secrets.token_urlsafe(32)
+        self.db.execute("INSERT INTO gf_sessions VALUES(?,?,?)",(token,owner,now()+86400))
+        self.commit()
+        return token
     def owner_from_token(self, token):
         row=self.one("SELECT owner_id FROM gf_sessions WHERE token=? AND expires_at>?",(token,now()))
         return row["owner_id"] if row else None
@@ -88,10 +92,13 @@ class Factory2:
     def start(self, owner):
         s=self.one("SELECT * FROM gf_settings WHERE owner_id=?",(owner,))
         if s["safe_mode"]: raise ValueError("safe_mode")
+        if s["running"]:
+            pending=self.one("SELECT job_id FROM jobs WHERE owner_id=? AND kind='AUTONOMOUS_CYCLE' AND status IN ('QUEUED','RUNNING') ORDER BY created_at DESC LIMIT 1",(owner,))
+            return {"started":True,"already_running":True,"job_id":pending["job_id"] if pending else None,"next":"growth_step"}
         self.db.execute("UPDATE gf_settings SET running=1 WHERE owner_id=?",(owner,))
         self.commit()
         cid=self.bootstrap_character(owner)
-        job=self.chuma.enqueue_job(owner,"AUTONOMOUS_CYCLE",{"character_id":cid,"platform":"local-test","max_attempts":3},"gf2-start-"+str(now()))
+        job=self.chuma.enqueue_job(owner,"AUTONOMOUS_CYCLE",{"character_id":cid,"platform":"local-test","max_attempts":3},"gf2-start-"+str(cid))
         self.event(owner,"FACTORY_STARTED",{"character_id":cid,"job_id":job})
         return {"started":True,"job_id":job,"next":"growth_step"}
     def pause(self, owner):
@@ -166,6 +173,9 @@ class Factory2:
         return {"action":action,"health":health,"budget_available":fund["balance"],"signal_confidence":round(confidence,3)}
 
     def run_growth_step(self, owner, character_id):
+        settings=self.one("SELECT running,safe_mode FROM gf_settings WHERE owner_id=?",(owner,))
+        if not settings or settings["safe_mode"]: raise ValueError("safe_mode")
+        if not settings["running"]: raise ValueError("factory_paused")
         profile=self.chuma.character_profile(owner,character_id)
         dna=profile.get("content_dna",{})
         preferred=dna.get("preferred_hooks",[])
@@ -180,6 +190,9 @@ class Factory2:
         return {"experiment_id":eid,"content_id":content_id,"cycle":result,"health":self.evolve_ip_health(owner,character_id)}
 
     def connect_platform(self, owner, platform):
+        platform=str(platform or "").strip().lower()
+        if not platform or len(platform)>100:
+            raise ValueError("invalid_platform")
         # Credentials/passwords are deliberately never accepted or stored here.
         # Compliance is fail-closed: a platform is not GREEN merely because it has an API.
         # GREEN must be explicitly approved/updated for the current jurisdiction and action.
