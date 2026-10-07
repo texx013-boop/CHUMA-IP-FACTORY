@@ -55,6 +55,11 @@ class Handler(BaseHTTPRequestHandler):
             if p=="/factory2/api/stop": return self.json(200,self.service.stop(o))
             if p=="/factory2/api/fund":
                 x=self.service.fund(o,data.get("amount")); return self.json(200,{"balance":x["balance"],"message":"Баланс пополнен."})
+            if p=="/factory2/api/spend":
+                x=self.service.spend(o,data.get("amount"),str(data.get("category","growth")),data.get("ip_id"),bool(data.get("approved",False)),str(data.get("note","")))
+                return self.json(200,x)
+            if p=="/factory2/api/notification/ack":
+                return self.json(200,{"acknowledged":self.service.acknowledge_notification(o,str(data.get("notification_id","")))})
             if p=="/factory2/api/settings": return self.json(200,self.service.settings(o,data))
             if p=="/factory2/api/platform": return self.json(200,self.service.connect_platform(o,str(data.get("platform","")).strip()))
             if p=="/factory2/api/experiment":
