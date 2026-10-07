@@ -106,8 +106,16 @@ class Factory2:
     def submit_distribution(self, owner, distribution_id):
         row=self.one("SELECT * FROM gf_distributions WHERE id=? AND owner_id=?",(distribution_id,owner))
         if not row: raise ValueError("distribution_not_found")
-        if row["state"]=="PUBLISHED": return dict(row)
+        if row["state"] in ("PUBLISHED","PUBLISHING","FAILED","BLOCKED_COMPLIANCE","BLOCKED_AUTH"):
+            return dict(row)
         if row["state"]!="QUEUED": return dict(row)
+        claimed=self.db.execute(
+            "UPDATE gf_distributions SET state='PUBLISHING',updated_at=? WHERE id=? AND owner_id=? AND state='QUEUED'",
+            (now(),distribution_id,owner)).rowcount
+        self.commit()
+        if claimed != 1:
+            return dict(self.one("SELECT * FROM gf_distributions WHERE id=? AND owner_id=?",(distribution_id,owner)))
+        row=self.one("SELECT * FROM gf_distributions WHERE id=? AND owner_id=?",(distribution_id,owner))
         compliance=self.compliance_status(row["platform"],"publish","RU")
         connection=self._platform_connection(owner,row["platform"])
         if compliance["legal_class"]!="GREEN" or not compliance["automation_allowed"]:
