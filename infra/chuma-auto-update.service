@@ -9,7 +9,7 @@ Type=simple
 User=root
 Environment=APP_ROOT=/opt/chuma
 Environment=CHUMA_UPDATE_INTERVAL=60
-Environment=CHUMA_AUTO_UPDATE=false
+Environment=CHUMA_AUTO_UPDATE=true
 ExecStart=/opt/chuma/agent/auto-update.sh
 Restart=always
 RestartSec=10
