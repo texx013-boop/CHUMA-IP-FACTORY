@@ -6,14 +6,12 @@ STATE_DIR="${APP_ROOT}/agent"
 BACKUP_DIR="${STATE_DIR}/backups"
 RELEASE_DIR="${APP_ROOT}/release"
 PREVIOUS_DIR="${APP_ROOT}/release.previous"
-REPO="${CHUMA_UPDATE_REPO:-git@github.com:texx013-boop/CHUMA-IP-FACTORY.git}"
+REPO="${CHUMA_UPDATE_REPO:-https://github.com/texx013-boop/CHUMA-IP-FACTORY.git}"
 BRANCH="${CHUMA_UPDATE_BRANCH:-main}"
 INTERVAL="${CHUMA_UPDATE_INTERVAL:-60}"
 AUTO_UPDATE="${CHUMA_AUTO_UPDATE:-true}"
 # GitHub CI is advisory by default; set true for a strict release gate.
 REQUIRE_CI_GREEN="${CHUMA_REQUIRE_CI_GREEN:-false}"
-GITHUB_KEY="${GITHUB_DEPLOY_KEY:-$STATE_DIR/github_deploy_ed25519}"
-KNOWN_HOSTS="${GITHUB_KNOWN_HOSTS:-$STATE_DIR/github_known_hosts}"
 LOCK_FILE="${STATE_DIR}/update.lock"
 LOG_FILE="${STATE_DIR}/update.log"
 ENV_FILE="${APP_ROOT}/infra/.env"
@@ -25,8 +23,7 @@ chmod 600 "$LOG_FILE"
 
 log() { printf '%s %s\n' "$(date -Is)" "$*" | tee -a "$LOG_FILE"; }
 compose() { "$APP_ROOT/infra/compose-run.sh" --env-file "$1" -f "$2" "${@:3}"; }
-GIT_SSH_COMMAND="ssh -i $GITHUB_KEY -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$KNOWN_HOSTS"
-git_env=(env GIT_SSH_COMMAND="$GIT_SSH_COMMAND")
+git_env=()
 remote_sha() { "${git_env[@]}" git ls-remote "$REPO" "refs/heads/$BRANCH" | awk 'NR==1{print $1}'; }
 ci_green(){
   local sha="$1" payload
@@ -166,12 +163,6 @@ while true; do
   if [[ "$AUTO_UPDATE" != "true" ]]; then sleep "$INTERVAL"; continue; fi
   if process_handoff; then sleep "$INTERVAL"; continue; fi
   if ! docker info >/dev/null 2>&1; then log "docker unavailable"; sleep "$INTERVAL"; continue; fi
-  if [[ ! -r "$GITHUB_KEY" || ! -r "$KNOWN_HOSTS" ]]; then
-    log "update blocked: GitHub SSH identity/known_hosts missing"
-    sleep "$INTERVAL"
-    continue
-  fi
-
   SHA="$(remote_sha || true)"
   if [[ -z "$SHA" || ! "$SHA" =~ ^[0-9a-f]{40}$ ]]; then
     log "unable to read valid remote revision"
@@ -212,7 +203,7 @@ while true; do
   cleanup() { rm -rf "$TMP"; }
   trap cleanup EXIT
 
-  if ! "${git_env[@]}" git clone --quiet --depth 1 --branch "$BRANCH" "$REPO" "$TMP/repo"; then
+  if ! git clone --quiet --depth 1 --branch "$BRANCH" "$REPO" "$TMP/repo"; then
     log "private repository access failed"
     trap - EXIT; cleanup; sleep "$INTERVAL"; continue
   fi
