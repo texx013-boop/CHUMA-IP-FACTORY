@@ -175,3 +175,15 @@ Verification status:
 - GitHub Actions currently reports no workflow run for this commit, so CI PASS is not claimed.
 - No live VK token, live publication, or live external measurement smoke test was performed.
 - Current implementation is ready for a controlled live OAuth/API smoke test once an owner-approved VK connection is available.
+
+
+## 2026-10-08 — Production boundary hardening after VK image contour
+
+Checkpoint: `76c0991a449b108d1a335149ca021843117d083c`
+
+- Centralized verified-artifact validation inside Factory 2 before any external provider is invoked.
+- The control plane independently verifies READY state, file existence, declared content hash and actual SHA-256 before handing the artifact to a provider.
+- Artifact failures are persisted as sanitized distribution failures.
+- This creates defense in depth: Factory 2 validates the artifact and the concrete VK provider validates it again immediately before upload.
+- No provider is allowed to receive an unverified image.
+- No live publication or production smoke test is claimed; current workflow-run visibility does not provide a CI result for these push commits.
