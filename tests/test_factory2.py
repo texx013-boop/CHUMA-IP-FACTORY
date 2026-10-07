@@ -164,3 +164,18 @@ def test_factory2_compliance_registry_is_fail_closed_and_expiring():
         f.set_compliance_rule(owner,"example-platform","publish","RU","RED",False,source="owner_review",note="closed")
         assert f.connect_platform(owner,"example-platform")["status"]=="OWNER_REVIEW"
         f.close()
+
+
+def test_factory2_experiment_lifecycle_and_idempotency():
+    with tempfile.TemporaryDirectory() as td:
+        f=Factory2(Path(td)/"factory.db", Path(td)/"media")
+        owner=f.create_owner("owner","password123")
+        cid=f.bootstrap_character(owner,"Test IP")
+        f.start(owner)
+        first=f.create_experiment(owner,cid,"test","engagement")
+        second=f.create_experiment(owner,cid,"different","engagement")
+        assert first==second
+        result=f.run_growth_step(owner,cid)
+        exp=f.one("SELECT status FROM gf_experiments WHERE id=?",(first,))
+        assert exp["status"]=="MEASURED"
+        f.close()
