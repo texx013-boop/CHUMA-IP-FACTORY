@@ -209,6 +209,13 @@ class Factory2:
         self.event(owner,"SETTINGS_UPDATED",patch); return self.dashboard(owner)
     def create_experiment(self, owner, character_id, hypothesis, target_signal="engagement"):
         self.one("SELECT character_id FROM characters WHERE character_id=? AND owner_id=?", (character_id, owner)) or (_ for _ in ()).throw(ValueError("character_not_found"))
+        # Only one unfinished experiment may own a character at a time.
+        active=self.one("""SELECT id FROM gf_experiments
+                           WHERE owner_id=? AND character_id=?
+                             AND status IN ('PLANNED','RUNNING','DISTRIBUTED','AWAITING_MEASUREMENT')
+                           ORDER BY created_at DESC LIMIT 1""",(owner,character_id))
+        if active:
+            return active["id"]
         eid=uid("EXP"); t=now()
         self.db.execute("INSERT INTO gf_experiments VALUES(?,?,?,?,?,?,?,?,?,?)",(eid,owner,character_id,hypothesis,"PLANNED",None,target_signal,"{}",t,t))
         self.commit(); self.event(owner,"EXPERIMENT_CREATED",{"experiment_id":eid,"character_id":character_id,"hypothesis":hypothesis,"target_signal":target_signal})
@@ -275,9 +282,12 @@ class Factory2:
         content_id=result.get("content_id")
         publication_id=result.get("publication_id")
         measured=result.get("metrics") or {}
-        self.db.execute("UPDATE gf_experiments SET status='MEASURED',content_id=?,result_json=?,updated_at=? WHERE id=?",
-                        (content_id,json.dumps({"publication_id":publication_id,"measurement_mode":"test_fixture",
-                                                "metrics":measured},ensure_ascii=False),now(),eid))
+        self.db.execute("UPDATE gf_experiments SET status='DISTRIBUTED',content_id=?,result_json=?,updated_at=? WHERE id=?",
+                        (content_id,json.dumps({"publication_id":publication_id,"distribution_mode":"test_fixture",
+                                                "measurement_status":"AWAITING_MEASUREMENT"},ensure_ascii=False),now(),eid))
+        # The built-in provider returns a measured fixture immediately; external adapters
+        # will be able to leave the experiment in AWAITING_MEASUREMENT instead.
+        self.db.execute("UPDATE gf_experiments SET status='AWAITING_MEASUREMENT',updated_at=? WHERE id=?",(now(),eid))
         self.commit()
 
         # Mirror measured metrics into Factory 2 with explicit provenance.
@@ -292,6 +302,11 @@ class Factory2:
             self.record_signal(owner,character_id,"follows",float(measured["follows"]),content_id,0.5,source)
 
         decision=self.learn_from_signal(owner,character_id)
+        self.db.execute("UPDATE gf_experiments SET status='MEASURED',result_json=?,updated_at=? WHERE id=?",
+                        (json.dumps({"publication_id":publication_id,"measurement_mode":source,
+                                     "metrics":measured,"decision_id":(decision or {}).get("decision_id")},
+                                    ensure_ascii=False),now(),eid))
+        self.commit()
         self.attention(owner,character_id,40,"CYCLE","Новый эксперимент измерен",
                        f"Эксперимент {eid} прошёл локальный контур; источник метрик: {source}.")
         return {"experiment_id":eid,"content_id":content_id,"publication_id":publication_id,
