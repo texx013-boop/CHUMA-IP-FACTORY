@@ -67,3 +67,24 @@ def test_factory2_experiment_signal_and_health():
         a=f.next_action(owner,cid)
         assert a["action"] in {"ORGANIC_EXPERIMENT","BOOST_TOP_SIGNAL","GROW_AUDIENCE","RUN_NEXT_EXPERIMENT"}
         f.close()
+
+
+def test_factory2_spend_limits_and_approval():
+    with tempfile.TemporaryDirectory() as td:
+        f=Factory2(Path(td)/"factory.db", Path(td)/"media")
+        owner=f.create_owner("owner","password123")
+        f.fund(owner,100)
+        f.settings(owner,{"daily_limit":20,"monthly_limit":50})
+        pending=f.spend(owner,10,category="promotion",approved=False,note="test")
+        assert pending["status"]=="PENDING_APPROVAL"
+        assert float(f.dashboard(owner)["fund"]["balance"])==100
+        assert f.dashboard(owner)["notifications"][0]["kind"]=="SPEND_APPROVAL_REQUIRED"
+        committed=f.spend(owner,10,category="promotion",approved=True,note="test-approved")
+        assert committed["status"]=="COMMITTED"
+        assert float(committed["balance"])==90
+        try:
+            f.spend(owner,11,category="promotion",approved=True)
+            assert False
+        except ValueError as e:
+            assert str(e)=="daily_spend_limit"
+        f.close()
