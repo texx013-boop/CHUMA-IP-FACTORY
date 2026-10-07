@@ -3,9 +3,9 @@
 Date: 2026-10-08
 Current release: 0.1.0
 
-Latest saved checkpoint: 774a9795486c94a8ec66d5bfd8bfaf37502a7875
+Latest saved checkpoint: fe6be8ac81257262454f6e8d83c9e2eef9c28149
 Main branch: main
-Current commit: 774a9795486c94a8ec66d5bfd8bfaf37502a7875
+Current commit: fe6be8ac81257262454f6e8d83c9e2eef9c28149
 
 ## Completed
 
@@ -112,3 +112,11 @@ Owner should ultimately need only: login → connect approved services → optio
 - Successful authentication clears the guard state.
 - Added regression coverage for lockout and reset behavior.
 - Latest code/test commits: `c3aff1c9727f5e8d2ac06f34ceed024ee1794282`, `9f8d64ef15b22ab5fb7bb9236022659d1576b6ed`, `b2a8a89a136cd00e7d9be8ffd5df6f89ee8772ea`.
+
+
+## 2026-10-08 — Session Secret Hardening
+- Factory 2 now stores only SHA-256 hashes of bearer session tokens in `gf_sessions`; plaintext session tokens are never persisted.
+- Existing persisted sessions are intentionally invalidated by this format change and require a fresh login.
+- Added regression coverage proving the returned token authenticates while the stored database value is only a 64-character hash.
+- Latest code/test checkpoint: `fe6be8ac81257262454f6e8d83c9e2eef9c28149`, `c63037264af379d8e7c462691cd927cccdfa9163`.
+- Local execution could not be completed in this environment because outbound network/DNS is unavailable and the registered remote development device is offline. GitHub source changes are saved.
