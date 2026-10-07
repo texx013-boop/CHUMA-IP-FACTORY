@@ -5,7 +5,7 @@ Current release: 0.1.0
 
 Latest verified commit: 13b481f5359bfe9c62e274179e384fecf9c4ffaa
 Main branch: main
-Current commit: 8bddfc4beeadb6cc93faebbfb6588632e8ca615f
+Current commit: f093d686b288668cc137858af11940374cdd7d9d
 
 ## Completed
 
@@ -86,3 +86,12 @@ Owner should ultimately need only: login → connect approved services → optio
 - Added regression tests for YELLOW/RED blocking, GREEN+OAuth path, idempotency, password-free connection metadata, and measurement state transitions.
 - Latest code/test commits: `6d856bde261ef5299065bc8486315816a607e938`, `9c517c0c41b24ec401f224bcdee5b51fd5a1afeb`, `2a747722400a58354ccbd5cdfb7607f0b96192e6`, `5bec4ac576ba3feb63d488710a26c337328e90ee`, `b1866d7c778f0824a44fb94696c2a0243fc6c5db`, `193ee23f05a326485873a78dc6071c2d6da0986b`.
 - CI result for these new push commits has not been observed through the available GitHub workflow-run endpoint yet; therefore this block is saved but not claimed as CI-verified.
+
+
+## 2026-10-08 — Final hardening of Distribution boundary
+- Fixed the Python class-boundary regression introduced while adding the external adapter; Factory 2 methods are again owned by `Factory2`.
+- A platform is now `READY` only when the compliance rule is GREEN + automation is explicitly allowed + both account ID and a credential-manager reference exist.
+- Raw credential values are rejected; accepted references must use `secret-manager://`, `oauth://` or `vault://` schemes.
+- Added regression coverage for raw credential rejection.
+- Latest saved code/test commits: `e3e28a3e2806adeace5728240cc8dcd337605466`, `2ea42e3e36c0b6b56b2966237cf91af240582b5b`, `f093d686b288668cc137858af11940374cdd7d9d`.
+- GitHub workflow status is not claimed because the available workflow-run endpoint does not expose push-triggered runs for these commits. The saved source is the final reviewed checkpoint for this block.
