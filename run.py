@@ -25,7 +25,7 @@ if __name__ == '__main__':
         run_factory2(
             host=os.getenv('CHUMA_HOST', '0.0.0.0'),
             port=int(os.getenv('PORT', os.getenv('CHUMA_PORT', '8097'))),
-            db=os.getenv('DATABASE_URL') or str(data_dir / 'factory2.db'),
+            db=str(data_dir / 'factory2.db'),
             media_root=os.getenv('CHUMA_MEDIA_DIR', str(data_dir / 'media')),
         )
         raise SystemExit(0)
