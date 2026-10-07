@@ -158,7 +158,7 @@ class Factory2:
             action="ORGANIC_EXPERIMENT"
         elif health["total"]>=70 and confidence>=0.6:
             action="BOOST_TOP_SIGNAL"
-        elif health["audience"] if False else False:
+        elif health["audience"] >= 50:
             action="GROW_AUDIENCE"
         else:
             action="RUN_NEXT_EXPERIMENT"
