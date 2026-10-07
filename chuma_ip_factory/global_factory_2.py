@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS gf_sessions(token TEXT PRIMARY KEY, owner_id TEXT NOT
 CREATE TABLE IF NOT EXISTS gf_spend_ledger(id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, category TEXT NOT NULL, amount REAL NOT NULL, ip_id TEXT, approved INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL, note TEXT NOT NULL, created_at INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS gf_notifications(id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, level TEXT NOT NULL, kind TEXT NOT NULL, title TEXT NOT NULL, detail TEXT NOT NULL, acknowledged INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS gf_attention(id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, character_id TEXT, priority INTEGER NOT NULL, kind TEXT NOT NULL, title TEXT NOT NULL, detail TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'OPEN', created_at INTEGER NOT NULL, resolved_at INTEGER);
+CREATE TABLE IF NOT EXISTS gf_compliance_rules(id TEXT PRIMARY KEY, platform TEXT NOT NULL, action TEXT NOT NULL, jurisdiction TEXT NOT NULL, legal_class TEXT NOT NULL, automation_allowed INTEGER NOT NULL DEFAULT 0, source TEXT NOT NULL, note TEXT NOT NULL, reviewed_at INTEGER NOT NULL, expires_at INTEGER, UNIQUE(platform,action,jurisdiction));
 """
 
 def now(): return int(time.time())
@@ -297,17 +298,53 @@ class Factory2:
                 "cycle":result,"measurement":{"mode":source,"metrics":measured},
                 "learning":decision,"health":self.evolve_ip_health(owner,character_id)}
 
+    def compliance_status(self, platform, action="publish", jurisdiction="RU"):
+        platform=str(platform or "").strip().lower()
+        action=str(action or "publish").strip().lower()
+        jurisdiction=str(jurisdiction or "RU").strip().upper()
+        row=self.one("""SELECT legal_class,automation_allowed,source,note,reviewed_at,expires_at
+                        FROM gf_compliance_rules
+                        WHERE platform=? AND action=? AND jurisdiction=?
+                          AND (expires_at IS NULL OR expires_at>=?)
+                        ORDER BY reviewed_at DESC LIMIT 1""",
+                     (platform,action,jurisdiction,now()))
+        if not row:
+            return {"legal_class":"YELLOW","automation_allowed":False,"source":"default_fail_closed",
+                    "note":"No current compliance rule: owner review required before automation.",
+                    "reviewed_at":None,"expires_at":None}
+        return dict(row)
+
+    def set_compliance_rule(self, owner, platform, action, jurisdiction, legal_class,
+                            automation_allowed=False, source="owner_review", note="", expires_at=None):
+        if legal_class not in ("GREEN","YELLOW","RED"):
+            raise ValueError("invalid_legal_class")
+        platform=str(platform or "").strip().lower()
+        action=str(action or "").strip().lower()
+        jurisdiction=str(jurisdiction or "").strip().upper()
+        if not platform or not action or not jurisdiction:
+            raise ValueError("invalid_compliance_rule")
+        if legal_class=="GREEN" and not bool(automation_allowed):
+            raise ValueError("green_requires_automation_allowed")
+        rid=uid("COMP")
+        self.db.execute("""INSERT OR REPLACE INTO gf_compliance_rules
+            (id,platform,action,jurisdiction,legal_class,automation_allowed,source,note,reviewed_at,expires_at)
+            VALUES(?,?,?,?,?,?,?,?,?,?)""",
+            (rid,platform,action,jurisdiction,legal_class,1 if automation_allowed else 0,
+             str(source),str(note),now(),int(expires_at) if expires_at else None))
+        self.commit()
+        self.event(owner,"COMPLIANCE_RULE_UPDATED",{"platform":platform,"action":action,
+                                                    "jurisdiction":jurisdiction,"legal_class":legal_class})
+        return self.compliance_status(platform,action,jurisdiction)
+
     def connect_platform(self, owner, platform):
         platform=str(platform or "").strip().lower()
         if not platform or len(platform)>100:
             raise ValueError("invalid_platform")
-        # Credentials/passwords are deliberately never accepted or stored here.
-        # Compliance is fail-closed: a platform is not GREEN merely because it has an API.
-        # GREEN must be explicitly approved/updated for the current jurisdiction and action.
-        allowed={}
-        legal=allowed.get(platform.lower(),"YELLOW")
-        status="READY" if legal=="GREEN" else "OWNER_REVIEW"
-        note=("Official API/OAuth connection required." if legal=="GREEN" else "Legal/platform status or action requires owner review before automation.")
+        compliance=self.compliance_status(platform,"publish","RU")
+        legal=compliance["legal_class"]
+        status="READY" if legal=="GREEN" and compliance["automation_allowed"] else "OWNER_REVIEW"
+        note=("Official API/OAuth connection required; current compliance rule permits automation."
+              if status=="READY" else compliance["note"])
         self.db.execute("INSERT OR REPLACE INTO gf_platforms(id,owner_id,platform,status,connection_method,legal_class,note,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)",
             (uid("PLAT"),owner,platform,status,"OAUTH/API",legal,note,now(),now()))
         self.commit(); self.event(owner,"PLATFORM_REGISTERED",{"platform":platform,"legal_class":legal,"status":status})
