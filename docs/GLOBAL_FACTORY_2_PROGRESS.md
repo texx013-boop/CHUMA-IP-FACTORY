@@ -3,7 +3,7 @@
 Date: 2026-10-08
 Current release: 0.1.0
 
-Latest saved checkpoint: fe6be8ac81257262454f6e8d83c9e2eef9c28149
+Latest saved checkpoint: 6e98e0ffb302cd0ec87675a903af3b24f50fb867
 Main branch: main
 Current commit: fe6be8ac81257262454f6e8d83c9e2eef9c28149
 
@@ -120,3 +120,12 @@ Owner should ultimately need only: login → connect approved services → optio
 - Added regression coverage proving the returned token authenticates while the stored database value is only a 64-character hash.
 - Latest code/test checkpoint: `fe6be8ac81257262454f6e8d83c9e2eef9c28149`, `c63037264af379d8e7c462691cd927cccdfa9163`.
 - Local execution could not be completed in this environment because outbound network/DNS is unavailable and the registered remote development device is offline. GitHub source changes are saved.
+
+
+## 2026-10-08 — External Provider Contract Hardening
+- Added explicit provider capability metadata and a registration hook for future official API adapters.
+- Base provider remains fail-closed and cannot claim a real publication.
+- Provider exceptions now transition a distribution to `FAILED` with sanitized error provenance; invalid provider states are also rejected.
+- Added regression coverage for the provider contract.
+- Source/test checkpoint: `27b7894e4b4560759408be3d5dd82c44badeaee3`, `6e98e0ffb302cd0ec87675a903af3b24f50fb867`.
+- CI workflow status remains unobservable for this push; no successful CI claim made.
