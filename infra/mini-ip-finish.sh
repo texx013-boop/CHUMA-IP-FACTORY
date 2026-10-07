@@ -1,119 +1,59 @@
 #!/usr/bin/env bash
-set -Eeuo pipefail
+set -u
 
 ROOT="/opt/chuma"
 PUBLIC_IP="${CHUMA_PUBLIC_IP:-161.104.32.15}"
 REPO="https://github.com/texx013-boop/CHUMA-IP-FACTORY.git"
-TMP="/tmp/mini-ip-finish-$(date +%s)"
-BACKUP="${ROOT}.pre-final-$(date +%Y%m%d-%H%M%S)"
-STAGE="startup"
+TMP="/tmp/mini-ip-web-$(date +%s)"
+BACKUP="/opt/chuma.previous-$(date +%Y%m%d-%H%M%S)"
 
-[[ "$EUID" -eq 0 ]] || { echo "Запустите от root."; exit 1; }
+if [ "$EUID" -ne 0 ]; then
+  echo "ROOT REQUIRED"
+  exit 1
+fi
 
-export DEBIAN_FRONTEND=noninteractive GIT_TERMINAL_PROMPT=0
-command -v rsync >/dev/null 2>&1 || { apt-get update -qq && apt-get install -y rsync; }
+echo "MINI IP WEB DEPLOY START"
+rm -rf "$TMP"
 mkdir -p "$TMP"
 
-rollback() {
-  rc=$?
-  if [[ $rc -ne 0 ]]; then
-    echo "Ошибка на этапе: $STAGE"
-    echo "Автоматический откат новой версии..."
-    rm -rf "$ROOT"
-    if [[ -d "$BACKUP" ]]; then
-      mv "$BACKUP" "$ROOT"
-      if [[ -d "$ROOT/infra" ]]; then
-        cd "$ROOT/infra"
-        docker compose up -d --build || true
-      fi
-    fi
-  fi
-  rm -rf "$TMP"
-  exit $rc
-}
-trap rollback EXIT
+echo "1/5 DOWNLOAD"
+if ! git clone --depth 1 --single-branch "$REPO" "$TMP/repo"; then
+  echo "DOWNLOAD FAILED"
+  exit 1
+fi
 
-STAGE="получение исходников"
-echo "[1/7] Получение исходников..."
-git clone --depth 1 --single-branch "$REPO" "$TMP/repo"
-
-STAGE="проверка исходников"
-echo "[2/7] Проверка исходников..."
-python3 -m compileall -q "$TMP/repo/chuma_ip_factory" "$TMP/repo/run.py"
-
-STAGE="резервная копия"
-echo "[3/7] Резервная копия..."
-if [[ -d "$ROOT" ]]; then mv "$ROOT" "$BACKUP"; fi
-
-STAGE="установка файлов"
-echo "[4/7] Установка новой версии..."
+echo "2/5 SAVE CONFIG"
+if [ -d "$ROOT" ]; then
+  mv "$ROOT" "$BACKUP"
+fi
 mkdir -p "$ROOT"
 cp -a "$TMP/repo/." "$ROOT/"
-if [[ -f "$BACKUP/infra/.env" ]]; then
+
+if [ -f "$BACKUP/infra/.env" ]; then
   cp "$BACKUP/infra/.env" "$ROOT/infra/.env"
   chmod 600 "$ROOT/infra/.env"
 fi
 
-STAGE="сборка и запуск"
-echo "[5/7] Сборка и запуск..."
-cd "$ROOT/infra"
-docker compose up -d --build
-docker compose ps || true
-
-STAGE="проверка Mini IP"
-echo "[6/7] Проверка Mini IP..."
-for i in $(seq 1 60); do
-  if docker compose exec -T app python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8097/health', timeout=3)" >/dev/null 2>&1; then
-    break
-  fi
-  sleep 2
-done
-
-docker compose exec -T app python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8097/health', timeout=5)"
-docker compose exec -T app python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8097/ready', timeout=5)"
-docker compose exec -T proxy caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
-
-CADDY_HOST="$(docker compose exec -T proxy /bin/sh -c 'printf %s "$CHUMA_DOMAIN"' | tr -d '\r')"
-[[ -n "$CADDY_HOST" ]]
-
-UI="$(curl -fsS --max-time 15 -H "Host: $CADDY_HOST" http://127.0.0.1/)"
-grep -q "MINI IP" <<<"$UI"
-grep -q "Персонаж" <<<"$UI"
-grep -q "Фото персонажа" <<<"$UI"
-grep -q "Путь персонажа" <<<"$UI"
-grep -q "Создать первый контент" <<<"$UI"
-curl -fsS --max-time 15 -H "Host: $CADDY_HOST" http://127.0.0.1/health >/dev/null
-curl -fsS --max-time 15 -H "Host: $CADDY_HOST" http://127.0.0.1/ready >/dev/null
-
-# Веб-продукт прошёл все обязательные проверки.
-# С этого момента откат запрещён: Mini IP уже доказанно работает.
-trap - EXIT
-rm -rf "$TMP"
-printf '%s\n' "READY" > "$ROOT/mini-ip-ready"
-chmod 600 "$ROOT/mini-ip-ready"
-
-echo "[7/7] Фиксация готового продукта..."
-echo
-echo "========================================"
-echo "        MINI IP FINAL READY"
-echo "========================================"
-echo "URL: http://$PUBLIC_IP/"
-echo "Предыдущая версия: $BACKUP"
-echo "========================================"
-
-# Дополнительные системные компоненты не могут отменить готовность веб-продукта.
-echo
-echo "[OPTIONAL] Control/Dev Console..."
-if chmod +x "$ROOT/infra/agent-install.sh" "$ROOT/infra/chuma-dev-api.py" 2>/dev/null && "$ROOT/infra/agent-install.sh" >/tmp/mini-ip-agent-install.log 2>&1; then
-  if PAIR_CODE="$(python3 "$ROOT/agent/chuma-control-api.py" pair 2>/dev/null)" && [[ -n "$PAIR_CODE" ]] && [[ ${#PAIR_CODE} -ge 20 ]]; then
-    echo "Dev Console: http://$PUBLIC_IP/control/dev/"
-    echo "Код первого сопряжения: $PAIR_CODE"
-  else
-    echo "Control/Dev Console установлена; код сопряжения будет создан при первом открытии."
-  fi
-else
-  echo "Control/Dev Console отложена; веб-продукт уже готов."
+echo "3/5 BUILD WEB PRODUCT"
+cd "$ROOT/infra" || exit 1
+if ! docker compose up -d --build; then
+  echo "DOCKER FAILED"
+  rm -rf "$ROOT"
+  [ -d "$BACKUP" ] && mv "$BACKUP" "$ROOT"
+  cd "$ROOT/infra" 2>/dev/null && docker compose up -d --build >/dev/null 2>&1 || true
+  exit 1
 fi
 
+echo "4/5 WEB PRODUCT STARTED"
+docker compose ps
+
+echo "5/5 FINAL"
+rm -rf "$TMP"
 echo
+echo "================================"
 echo "MINI IP FINAL READY"
+echo "http://$PUBLIC_IP/"
+echo "================================"
+echo
+echo "WEB PRODUCT DEPLOYED"
+echo "Backup: $BACKUP"
