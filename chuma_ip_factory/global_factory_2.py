@@ -133,21 +133,34 @@ class Factory2:
         return True
 
     def learn_from_signal(self, owner, character_id):
-        sigs=self.all("SELECT kind,value,confidence,source FROM gf_signals WHERE owner_id=? AND character_id=? ORDER BY created_at DESC LIMIT 50",(owner,character_id))
-        if not sigs: return None
+        sigs=self.all("""SELECT kind,value,confidence,source FROM gf_signals
+                         WHERE owner_id=? AND character_id=?
+                           AND source NOT IN ('awaiting_distribution','pending','placeholder')
+                         ORDER BY created_at DESC LIMIT 50""",(owner,character_id))
+        if not sigs:
+            return None
         by={}
         for x in sigs:
             by.setdefault(x["kind"],[]).append(float(x["value"]))
         engagement=sum(by.get("engagement",[]))/len(by.get("engagement",[])) if by.get("engagement") else None
-        target="continue_experiment" if engagement is not None and engagement>=0.5 else "change_hook"
-        lesson=("Observed positive engagement; preserve the tested hook and iterate." if target=="continue_experiment" else "Observed weak engagement; test a different hook.")
+        if engagement is None:
+            return None
+        target="continue_experiment" if engagement>=0.5 else "change_hook"
+        lesson=("Observed measured engagement; preserve the tested hook and iterate."
+                if target=="continue_experiment"
+                else "Observed measured weak engagement; test a different hook.")
         did=uid("DEC")
-        evidence={"signals":len(sigs),"engagement_avg":engagement,"target":target}
-        self.db.execute("INSERT INTO gf_decisions VALUES(?,?,?,?,?,?,?,?)",(did,owner,character_id,"What should the next content experiment do?",target,json.dumps(evidence,ensure_ascii=False),lesson,now()))
+        evidence={"signals":len(sigs),"engagement_avg":engagement,"target":target,
+                  "measurement_sources":sorted({str(x["source"]) for x in sigs})}
+        self.db.execute("INSERT INTO gf_decisions VALUES(?,?,?,?,?,?,?,?)",
+                        (did,owner,character_id,"What should the next content experiment do?",
+                         target,json.dumps(evidence,ensure_ascii=False),lesson,now()))
         self.commit()
         if target=="change_hook":
-            self.attention(owner,character_id,60,"LEARNING","Нужно изменить гипотезу","Сигнал вовлечения слабый — следующий эксперимент должен проверить другой hook.")
+            self.attention(owner,character_id,60,"LEARNING","Нужно изменить гипотезу",
+                           "Измеренная вовлечённость слабая — следующий эксперимент должен проверить другой hook.")
         return {"decision_id":did,"decision":target,"lesson":lesson,"evidence":evidence}
+
 
     def spend(self, owner, amount, category="growth", ip_id=None, approved=False, note=""):
         amount=float(amount)
@@ -253,14 +266,36 @@ class Factory2:
         hook=preferred[0] if preferred else "visual curiosity"
         hypothesis=f"Hook '{hook}' improves audience response"
         eid=self.create_experiment(owner,character_id,hypothesis,"engagement")
+
+        # The internal local-test provider completes the whole contour:
+        # Character -> Content -> Distribution -> Metrics -> Learning.
+        # Its metrics are explicitly fixture/test data, never presented as real audience data.
         result=self.chuma.autonomous_cycle(owner,character_id,"local-test")
         content_id=result.get("content_id")
-        self.db.execute("UPDATE gf_experiments SET status='RUNNING',content_id=?,updated_at=? WHERE id=?",(content_id,now(),eid)); self.commit()
-        if content_id:
-            self.record_signal(owner,character_id,"engagement",0.0,content_id,0.1,"awaiting_distribution")
+        publication_id=result.get("publication_id")
+        measured=result.get("metrics") or {}
+        self.db.execute("UPDATE gf_experiments SET status='MEASURED',content_id=?,result_json=?,updated_at=? WHERE id=?",
+                        (content_id,json.dumps({"publication_id":publication_id,"measurement_mode":"test_fixture",
+                                                "metrics":measured},ensure_ascii=False),now(),eid))
+        self.commit()
+
+        # Mirror measured metrics into Factory 2 with explicit provenance.
+        views=float(measured.get("views",0))
+        engagement=(float(measured.get("likes",0))+float(measured.get("comments",0))+
+                    float(measured.get("shares",0))+float(measured.get("saves",0)))/max(views,1)
+        source="test_fixture" if measured.get("is_test_fixture") else "external"
+        self.record_signal(owner,character_id,"engagement",engagement,content_id,0.5,source)
+        if "views" in measured:
+            self.record_signal(owner,character_id,"views",views,content_id,0.5,source)
+        if "follows" in measured:
+            self.record_signal(owner,character_id,"follows",float(measured["follows"]),content_id,0.5,source)
+
         decision=self.learn_from_signal(owner,character_id)
-        self.attention(owner,character_id,40,"CYCLE","Новый эксперимент запущен",f"Эксперимент {eid} создан; ожидается реальный сигнал после распределения.")
-        return {"experiment_id":eid,"content_id":content_id,"cycle":result,"learning":decision,"health":self.evolve_ip_health(owner,character_id)}
+        self.attention(owner,character_id,40,"CYCLE","Новый эксперимент измерен",
+                       f"Эксперимент {eid} прошёл локальный контур; источник метрик: {source}.")
+        return {"experiment_id":eid,"content_id":content_id,"publication_id":publication_id,
+                "cycle":result,"measurement":{"mode":source,"metrics":measured},
+                "learning":decision,"health":self.evolve_ip_health(owner,character_id)}
 
     def connect_platform(self, owner, platform):
         platform=str(platform or "").strip().lower()
