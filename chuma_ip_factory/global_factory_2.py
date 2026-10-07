@@ -147,6 +147,24 @@ class Factory2:
         self.commit()
         return dict(self.one("SELECT * FROM gf_ip_health WHERE character_id=?",(character_id,)))
 
+    def next_action(self, owner, character_id):
+        health=self.evolve_ip_health(owner,character_id)
+        recent=self.all("SELECT kind,value,confidence FROM gf_signals WHERE owner_id=? AND character_id=? ORDER BY created_at DESC LIMIT 20",(owner,character_id))
+        views=sum(float(x["value"]) for x in recent if x["kind"]=="views")
+        engagement=sum(float(x["value"]) for x in recent if x["kind"]=="engagement")
+        confidence=sum(float(x["confidence"]) for x in recent)/len(recent) if recent else 0
+        fund=self.one("SELECT * FROM gf_funds WHERE owner_id=?",(owner,))
+        if fund["balance"]<=0:
+            action="ORGANIC_EXPERIMENT"
+        elif health["total"]>=70 and confidence>=0.6:
+            action="BOOST_TOP_SIGNAL"
+        elif health["audience"] if False else False:
+            action="GROW_AUDIENCE"
+        else:
+            action="RUN_NEXT_EXPERIMENT"
+        self.event(owner,"NEXT_ACTION_SELECTED",{"character_id":character_id,"action":action,"health":health["total"],"confidence":round(confidence,3),"views":views,"engagement":engagement})
+        return {"action":action,"health":health,"budget_available":fund["balance"],"signal_confidence":round(confidence,3)}
+
     def run_growth_step(self, owner, character_id):
         profile=self.chuma.character_profile(owner,character_id)
         dna=profile.get("content_dna",{})
