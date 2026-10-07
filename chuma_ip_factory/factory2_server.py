@@ -64,6 +64,12 @@ class Handler(BaseHTTPRequestHandler):
                 return self.json(200,{"resolved":self.service.resolve_attention(o,str(data.get("attention_id","")))})
             if p=="/factory2/api/settings": return self.json(200,self.service.settings(o,data))
             if p=="/factory2/api/platform": return self.json(200,self.service.connect_platform(o,str(data.get("platform","")).strip()))
+            if p=="/factory2/api/compliance":
+                return self.json(200,self.service.set_compliance_rule(
+                    o,str(data.get("platform","")).strip(),str(data.get("action","publish")).strip(),
+                    str(data.get("jurisdiction","RU")).strip(),str(data.get("legal_class","YELLOW")).strip(),
+                    bool(data.get("automation_allowed",False)),str(data.get("source","owner_review")),
+                    str(data.get("note","")),data.get("expires_at")))
             if p=="/factory2/api/experiment":
                 cid=str(data.get("character_id","")).strip()
                 return self.json(201,{"experiment_id":self.service.create_experiment(o,cid,str(data.get("hypothesis","")).strip(),str(data.get("target_signal","engagement")))})
