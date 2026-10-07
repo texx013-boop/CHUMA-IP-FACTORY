@@ -13,6 +13,10 @@ CREATE TABLE IF NOT EXISTS gf_settings(owner_id TEXT PRIMARY KEY, autonomy INTEG
 CREATE TABLE IF NOT EXISTS gf_funds(owner_id TEXT PRIMARY KEY, balance REAL NOT NULL DEFAULT 0, reserved REAL NOT NULL DEFAULT 0, spent REAL NOT NULL DEFAULT 0, updated_at INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS gf_platforms(id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, platform TEXT NOT NULL, status TEXT NOT NULL, connection_method TEXT NOT NULL, legal_class TEXT NOT NULL, note TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS gf_events(id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, kind TEXT NOT NULL, detail_json TEXT NOT NULL, created_at INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS gf_experiments(id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, character_id TEXT NOT NULL, hypothesis TEXT NOT NULL, status TEXT NOT NULL, content_id TEXT, target_signal TEXT NOT NULL, result_json TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS gf_signals(id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, character_id TEXT NOT NULL, content_id TEXT, kind TEXT NOT NULL, value REAL NOT NULL, confidence REAL NOT NULL, source TEXT NOT NULL, created_at INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS gf_decisions(id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, character_id TEXT, problem TEXT NOT NULL, decision TEXT NOT NULL, evidence_json TEXT NOT NULL, lesson TEXT NOT NULL, created_at INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS gf_ip_health(character_id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, identity REAL NOT NULL, content REAL NOT NULL, audience REAL NOT NULL, learning REAL NOT NULL, economics REAL NOT NULL, total REAL NOT NULL, updated_at INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS gf_sessions(token TEXT PRIMARY KEY, owner_id TEXT NOT NULL, expires_at INTEGER NOT NULL);
 """
 
@@ -83,7 +87,7 @@ class Factory2:
         cid=self.bootstrap_character(owner)
         job=self.chuma.enqueue_job(owner,"AUTONOMOUS_CYCLE",{"character_id":cid,"platform":"local-test","max_attempts":3},"gf2-start-"+str(now()))
         self.event(owner,"FACTORY_STARTED",{"character_id":cid,"job_id":job})
-        return {"started":True,"job_id":job}
+        return {"started":True,"job_id":job,"next":"growth_step"}
     def pause(self, owner):
         self.db.execute("UPDATE gf_settings SET running=0 WHERE owner_id=?",(owner,)); self.commit(); self.event(owner,"FACTORY_PAUSED",{}); return {"paused":True}
     def stop(self, owner):
@@ -105,6 +109,52 @@ class Factory2:
         if sets:
             vals.append(owner); self.db.execute("UPDATE gf_settings SET "+",".join(sets)+" WHERE owner_id=?",vals); self.commit()
         self.event(owner,"SETTINGS_UPDATED",patch); return self.dashboard(owner)
+    def create_experiment(self, owner, character_id, hypothesis, target_signal="engagement"):
+        self.one("SELECT character_id FROM characters WHERE character_id=? AND owner_id=?", (character_id, owner)) or (_ for _ in ()).throw(ValueError("character_not_found"))
+        eid=uid("EXP"); t=now()
+        self.db.execute("INSERT INTO gf_experiments VALUES(?,?,?,?,?,?,?,?,?,?)",(eid,owner,character_id,hypothesis,"PLANNED",None,target_signal,"{}",t,t))
+        self.commit(); self.event(owner,"EXPERIMENT_CREATED",{"experiment_id":eid,"character_id":character_id,"hypothesis":hypothesis,"target_signal":target_signal})
+        return eid
+
+    def record_signal(self, owner, character_id, kind, value, content_id=None, confidence=0.5, source="system"):
+        self.one("SELECT character_id FROM characters WHERE character_id=? AND owner_id=?", (character_id, owner)) or (_ for _ in ()).throw(ValueError("character_not_found"))
+        sid=uid("SIG"); self.db.execute("INSERT INTO gf_signals VALUES(?,?,?,?,?,?,?,?,?)",(sid,owner,character_id,content_id,kind,float(value),float(max(0,min(1,confidence))),source,now()))
+        self.commit(); self.event(owner,"SIGNAL_RECORDED",{"signal_id":sid,"kind":kind,"value":value,"confidence":confidence})
+        return sid
+
+    def evolve_ip_health(self, owner, character_id):
+        self.one("SELECT character_id FROM characters WHERE character_id=? AND owner_id=?", (character_id, owner)) or (_ for _ in ()).throw(ValueError("character_not_found"))
+        # Initial score is deliberately conservative; it rises only from observed signals.
+        sigs=self.all("SELECT kind,value,confidence FROM gf_signals WHERE owner_id=? AND character_id=? ORDER BY created_at DESC LIMIT 100",(owner,character_id))
+        engagement=[float(x["value"]) for x in sigs if x["kind"] in ("engagement","like_rate")]
+        audience=[float(x["value"]) for x in sigs if x["kind"] in ("views","follows","audience_growth")]
+        content=[float(x["value"]) for x in sigs if x["kind"] in ("content_quality","retention")]
+        avg=lambda xs: max(0,min(100,(sum(xs)/len(xs))*100)) if xs else 0.0
+        identity=100.0
+        content_score=avg(content or engagement)
+        audience_score=avg(audience)
+        learning=min(100.0,len(sigs)*5.0)
+        economics=0.0
+        total=round(identity*.20+content_score*.20+audience_score*.25+learning*.20+economics*.15,2)
+        t=now()
+        self.db.execute("INSERT OR REPLACE INTO gf_ip_health VALUES(?,?,?,?,?,?,?,?)",(character_id,owner,identity,content_score,audience_score,learning,economics,total,t))
+        self.commit()
+        return dict(self.one("SELECT * FROM gf_ip_health WHERE character_id=?",(character_id,)))
+
+    def run_growth_step(self, owner, character_id):
+        profile=self.chuma.character_profile(owner,character_id)
+        dna=profile.get("content_dna",{})
+        preferred=dna.get("preferred_hooks",[])
+        hook=preferred[0] if preferred else "visual curiosity"
+        hypothesis=f"Hook '{hook}' improves audience response"
+        eid=self.create_experiment(owner,character_id,hypothesis,"engagement")
+        result=self.chuma.autonomous_cycle(owner,character_id,"local-test")
+        content_id=result.get("content_id")
+        self.db.execute("UPDATE gf_experiments SET status='RUNNING',content_id=?,updated_at=? WHERE id=?",(content_id,now(),eid)); self.commit()
+        if content_id:
+            self.record_signal(owner,character_id,"engagement",0.0,content_id,0.1,"awaiting_distribution")
+        return {"experiment_id":eid,"content_id":content_id,"cycle":result,"health":self.evolve_ip_health(owner,character_id)}
+
     def connect_platform(self, owner, platform):
         # Credentials/passwords are deliberately never accepted or stored here.
         # Compliance is fail-closed: a platform is not GREEN merely because it has an API.
