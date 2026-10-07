@@ -147,3 +147,20 @@ def test_factory2_learning_ignores_pending_distribution_signal():
         decision=f.learn_from_signal(owner,cid)
         assert decision["decision"]=="continue_experiment"
         f.close()
+
+
+def test_factory2_compliance_registry_is_fail_closed_and_expiring():
+    with tempfile.TemporaryDirectory() as td:
+        f=Factory2(Path(td)/"factory.db", Path(td)/"media")
+        owner=f.create_owner("owner","password123")
+        initial=f.compliance_status("example-platform")
+        assert initial["legal_class"]=="YELLOW"
+        assert initial["automation_allowed"] is False
+        assert f.connect_platform(owner,"example-platform")["status"]=="OWNER_REVIEW"
+        rule=f.set_compliance_rule(owner,"example-platform","publish","RU","GREEN",True,source="owner_review",note="test rule")
+        assert rule["legal_class"]=="GREEN"
+        assert rule["automation_allowed"]==1
+        assert f.connect_platform(owner,"example-platform")["status"]=="READY"
+        f.set_compliance_rule(owner,"example-platform","publish","RU","RED",False,source="owner_review",note="closed")
+        assert f.connect_platform(owner,"example-platform")["status"]=="OWNER_REVIEW"
+        f.close()
