@@ -1,5 +1,5 @@
 from __future__ import annotations
-import json, os, secrets, sqlite3, time, uuid
+import hashlib, json, os, secrets, sqlite3, time, uuid
 from pathlib import Path
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import urlsplit
@@ -178,11 +178,15 @@ class Factory2:
     def session(self, owner):
         self.db.execute("DELETE FROM gf_sessions WHERE expires_at<=?",(now(),))
         token=secrets.token_urlsafe(32)
-        self.db.execute("INSERT INTO gf_sessions VALUES(?,?,?)",(token,owner,now()+86400))
+        token_hash=hashlib.sha256(token.encode()).hexdigest()
+        self.db.execute("INSERT INTO gf_sessions VALUES(?,?,?)",(token_hash,owner,now()+86400))
         self.commit()
         return token
     def owner_from_token(self, token):
-        row=self.one("SELECT owner_id FROM gf_sessions WHERE token=? AND expires_at>?",(token,now()))
+        if not token:
+            return None
+        token_hash=hashlib.sha256(str(token).encode()).hexdigest()
+        row=self.one("SELECT owner_id FROM gf_sessions WHERE token=? AND expires_at>?",(token_hash,now()))
         return row["owner_id"] if row else None
     def bootstrap_character(self, owner, name="Леся"):
         row=self.one("SELECT character_id FROM characters WHERE owner_id=? ORDER BY created_at LIMIT 1",(owner,))
