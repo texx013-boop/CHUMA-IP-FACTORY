@@ -311,6 +311,18 @@ def test_factory2_session_token_is_not_persisted_in_plaintext():
         f.close()
 
 
+
+def test_factory2_expired_session_is_rejected():
+    with tempfile.TemporaryDirectory() as td:
+        f=Factory2(Path(td)/"factory.db", Path(td)/"media")
+        owner=f.create_owner("owner","password123")
+        token=f.session(owner)
+        f.db.execute("UPDATE gf_sessions SET expires_at=? WHERE owner_id=?", (int(time.time())-1,owner))
+        f.commit()
+        assert f.owner_from_token(token) is None
+        f.close()
+
+
 def test_factory2_provider_contract_metadata_and_failure_is_fail_closed():
     with tempfile.TemporaryDirectory() as td:
         f=Factory2(Path(td)/"factory.db", Path(td)/"media")
