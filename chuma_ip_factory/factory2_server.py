@@ -60,6 +60,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.json(200,x)
             if p=="/factory2/api/notification/ack":
                 return self.json(200,{"acknowledged":self.service.acknowledge_notification(o,str(data.get("notification_id","")))})
+            if p=="/factory2/api/attention/resolve":
+                return self.json(200,{"resolved":self.service.resolve_attention(o,str(data.get("attention_id","")))})
             if p=="/factory2/api/settings": return self.json(200,self.service.settings(o,data))
             if p=="/factory2/api/platform": return self.json(200,self.service.connect_platform(o,str(data.get("platform","")).strip()))
             if p=="/factory2/api/experiment":
