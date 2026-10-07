@@ -84,10 +84,13 @@ curl -fsS --max-time 10 -H "Host: $CADDY_HOST" http://127.0.0.1/health >/dev/nul
 curl -fsS --max-time 10 -H "Host: $CADDY_HOST" http://127.0.0.1/ready >/dev/null
 POST_RESTART_HTTP="$(curl -sS -o /dev/null -w "%{http_code}" --connect-timeout 5 --max-time 10 "http://$PUBLIC_IP/health" || true)"
 echo "External HTTP after restart: ${POST_RESTART_HTTP:-failed}"
+echo
+echo "[FINAL] Генерация и проверка кода первого сопряжения..."
+PAIR_CODE="$(python3 "$ROOT/agent/chuma-control-api.py" pair)"
+[[ -n "$PAIR_CODE" ]]
+[[ ${#PAIR_CODE} -ge 20 ]]
 trap - EXIT
 rm -rf "$TMP"
-echo
-PAIR_CODE="$(python3 "$ROOT/agent/chuma-control-api.py" pair)"
 echo "MINI IP FINAL READY"
 echo "http://$PUBLIC_IP/"
 echo "Dev Console: http://$PUBLIC_IP/control/dev/"
