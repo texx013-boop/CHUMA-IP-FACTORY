@@ -82,6 +82,9 @@ class Handler(BaseHTTPRequestHandler):
                 return self.json(200,self.service.record_external_measurement(
                     o,str(data.get("distribution_id","")).strip(),data.get("metrics") or {},
                     float(data.get("confidence",0.5))))
+            if p=="/factory2/api/distribution/poll":
+                return self.json(200,self.service.poll_external_measurement(
+                    o,str(data.get("distribution_id","")).strip()))
             if p=="/factory2/api/compliance":
                 return self.json(200,self.service.set_compliance_rule(
                     o,str(data.get("platform","")).strip(),str(data.get("action","publish")).strip(),
