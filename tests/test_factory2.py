@@ -1,6 +1,7 @@
 import tempfile
+import os
 from pathlib import Path
-from chuma_ip_factory.global_factory_2 import Factory2, VERSION
+from chuma_ip_factory.global_factory_2 import Factory2, VERSION, ExternalProviderError
 
 def test_factory2_owner_dashboard_and_start():
     with tempfile.TemporaryDirectory() as td:
