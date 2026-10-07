@@ -51,3 +51,19 @@ def test_factory2_stop_is_safe():
 
 def test_factory2_version():
     assert VERSION=="0.1.0"
+
+
+def test_factory2_experiment_signal_and_health():
+    with tempfile.TemporaryDirectory() as td:
+        f=Factory2(Path(td)/"factory.db", Path(td)/"media")
+        owner=f.create_owner("owner","password123")
+        cid=f.bootstrap_character(owner,"Test IP")
+        eid=f.create_experiment(owner,cid,"Test hook improves engagement","engagement")
+        assert eid.startswith("EXP-")
+        sid=f.record_signal(owner,cid,"engagement",0.72,confidence=0.8)
+        assert sid.startswith("SIG-")
+        h=f.evolve_ip_health(owner,cid)
+        assert h["total"] >= 0
+        a=f.next_action(owner,cid)
+        assert a["action"] in {"ORGANIC_EXPERIMENT","BOOST_TOP_SIGNAL","GROW_AUDIENCE","RUN_NEXT_EXPERIMENT"}
+        f.close()
