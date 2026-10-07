@@ -275,3 +275,20 @@ def test_factory2_unknown_provider_uses_safe_adapter_contract_only():
         assert result["external_id"] is None
         assert result["state"]=="SUBMITTED"
         f.close()
+
+
+def test_factory2_auth_guard_locks_after_five_failures_and_resets_on_success():
+    with tempfile.TemporaryDirectory() as td:
+        f=Factory2(Path(td)/"factory.db", Path(td)/"media")
+        owner=f.create_owner("owner","password123")
+        key="login:owner"
+        assert f.auth_guard_check(key) is True
+        for _ in range(5):
+            f.auth_guard_failure(key)
+        assert f.auth_guard_check(key) is False
+        f.db.execute("UPDATE gf_auth_guard SET locked_until=? WHERE key=?",(0,key))
+        f.commit()
+        f.auth_guard_success(key)
+        assert f.auth_guard_check(key) is True
+        assert f.verify("owner","password123")==owner
+        f.close()
