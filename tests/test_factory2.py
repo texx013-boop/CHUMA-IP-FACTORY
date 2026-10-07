@@ -114,3 +114,36 @@ def test_factory2_start_is_idempotent():
         assert second["already_running"] is True
         assert second["job_id"]==first["job_id"]
         f.close()
+
+
+def test_factory2_growth_step_uses_measured_fixture_and_not_placeholder():
+    with tempfile.TemporaryDirectory() as td:
+        f=Factory2(Path(td)/"factory.db", Path(td)/"media")
+        owner=f.create_owner("owner","password123")
+        cid=f.bootstrap_character(owner,"Test IP")
+        f.start(owner)
+        result=f.run_growth_step(owner,cid)
+        assert result["measurement"]["mode"]=="test_fixture"
+        assert result["measurement"]["metrics"]["is_test_fixture"] is True
+        assert result["learning"] is not None
+        assert result["experiment_id"].startswith("EXP-")
+        exp=f.one("SELECT status,result_json FROM gf_experiments WHERE id=?",(result["experiment_id"],))
+        assert exp["status"]=="MEASURED"
+        assert "measurement_mode" in exp["result_json"]
+        sigs=f.all("SELECT kind,value,source FROM gf_signals WHERE owner_id=? AND content_id=?",(owner,result["content_id"]))
+        assert sigs
+        assert all(s["source"]=="test_fixture" for s in sigs)
+        assert not any(float(s["value"])==0.0 and s["source"]=="awaiting_distribution" for s in sigs)
+        f.close()
+
+def test_factory2_learning_ignores_pending_distribution_signal():
+    with tempfile.TemporaryDirectory() as td:
+        f=Factory2(Path(td)/"factory.db", Path(td)/"media")
+        owner=f.create_owner("owner","password123")
+        cid=f.bootstrap_character(owner,"Test IP")
+        f.record_signal(owner,cid,"engagement",0.0,confidence=0.1,source="awaiting_distribution")
+        assert f.learn_from_signal(owner,cid) is None
+        f.record_signal(owner,cid,"engagement",0.8,confidence=0.8,source="test_fixture")
+        decision=f.learn_from_signal(owner,cid)
+        assert decision["decision"]=="continue_experiment"
+        f.close()
