@@ -1,5 +1,5 @@
 from __future__ import annotations
-import hashlib, json, os, secrets, sqlite3, time, uuid
+import hashlib, json, os, secrets, sqlite3, time, uuid, mimetypes
 from pathlib import Path
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import urlsplit
@@ -118,7 +118,7 @@ class Factory2:
                             (json.dumps({"error":"content_artifact_missing"},ensure_ascii=False),now(),distribution_id))
             self.commit()
             raise ExternalProviderError("content_artifact_missing")
-        artifact_payload={k:artifact[k] for k in ("artifact_id","variant","mime_type","storage_path","content_hash","provider")}
+        artifact_payload={k:artifact[k] for k in ("artifact_id","variant","mime_type","storage_path","content_hash","provider","status")}
         try:
             result=adapter.publish({"content_id":row["content_id"],"character_id":content_row["character_id"],
                                     "text":publish_text,"artifact":artifact_payload,
@@ -596,6 +596,30 @@ class VKOfficialAdapter(ExternalDistributionAdapter):
             raise ExternalProviderError("provider_api_error")
         return body.get("response") or {}
 
+    def upload_multipart(self, upload_url, file_path, mime_type):
+        boundary="----GF2VK"+secrets.token_hex(12)
+        filename=Path(file_path).name
+        raw=Path(file_path).read_bytes()
+        head=(
+            f"--{boundary}\\r\\n"
+            f'Content-Disposition: form-data; name="photo"; filename="{filename}"\\r\\n'
+            f"Content-Type: {mime_type}\\r\\n\\r\\n"
+        ).encode("utf-8")
+        tail=f"\\r\\n--{boundary}--\\r\\n".encode("utf-8")
+        body=head+raw+tail
+        req=__import__("urllib.request",fromlist=["Request"]).Request(
+            str(upload_url),data=body,method="POST",
+            headers={"Content-Type":f"multipart/form-data; boundary={boundary}",
+                     "Content-Length":str(len(body))})
+        try:
+            with __import__("urllib.request",fromlist=["urlopen"]).urlopen(req,timeout=30) as response:
+                result=json.loads(response.read().decode("utf-8"))
+        except Exception as exc:
+            raise ExternalProviderError("provider_upload_error") from exc
+        if not isinstance(result,dict) or not result.get("server") or "photo" not in result or not result.get("hash"):
+            raise ExternalProviderError("provider_upload_invalid_response")
+        return result
+
     def publish(self, payload):
         owner_id=int(str(payload.get("account_id") or "0"))
         if owner_id==0:
@@ -606,23 +630,53 @@ class VKOfficialAdapter(ExternalDistributionAdapter):
         artifact=payload.get("artifact") or {}
         if not artifact.get("storage_path") or not artifact.get("content_hash"):
             raise ExternalProviderError("artifact_required")
-        if artifact.get("status") not in (None,"READY"):
+        if artifact.get("status") != "READY":
             raise ExternalProviderError("artifact_not_ready")
         if not os.path.isfile(str(artifact["storage_path"])):
             raise ExternalProviderError("artifact_not_found")
-        if str(artifact.get("mime_type","")).lower() not in ("image/jpeg","image/png","image/webp","image/svg+xml"):
+        mime=str(artifact.get("mime_type","")).lower()
+        if mime not in ("image/jpeg","image/png","image/webp"):
             raise ExternalProviderError("artifact_mime_not_supported")
         actual=hashlib.sha256(Path(str(artifact["storage_path"])).read_bytes()).hexdigest()
         if actual != str(artifact["content_hash"]):
             raise ExternalProviderError("artifact_hash_mismatch")
         token=self._resolve_token(payload.get("credential_ref"))
-        response=self.request("wall.post",{"owner_id":owner_id,"message":text,"from_group":1 if owner_id < 0 else 0},token)
+
+        upload_server=self.request("photos.getWallUploadServer",{"owner_id":owner_id},token)
+        upload_url=upload_server.get("upload_url")
+        if not upload_url:
+            raise ExternalProviderError("provider_upload_url_missing")
+        uploaded=self.upload_multipart(upload_url,artifact["storage_path"],mime)
+
+        saved=self.request("photos.saveWallPhoto",{
+            "owner_id":owner_id,
+            "user_id":upload_server.get("user_id"),
+            "photo":uploaded.get("photo"),
+            "server":uploaded.get("server"),
+            "hash":uploaded.get("hash"),
+            "caption":text[:2048],
+        },token)
+        photo=saved[0] if isinstance(saved,list) and saved else {}
+        photo_id=photo.get("id")
+        photo_owner=photo.get("owner_id",owner_id)
+        if not photo_id:
+            raise ExternalProviderError("provider_missing_photo_id")
+        attachment=f"photo{int(photo_owner)}_{int(photo_id)}"
+        response=self.request("wall.post",{
+            "owner_id":owner_id,
+            "message":text,
+            "attachments":attachment,
+            "from_group":1 if owner_id < 0 else 0,
+        },token)
         post_id=response.get("post_id")
         if not post_id:
             raise ExternalProviderError("provider_missing_post_id")
         return {"state":"PUBLISHED","provider":"vk","mode":self.mode,
                 "external_id":f"{owner_id}_{int(post_id)}","post_id":int(post_id),
-                "provenance":{"api":"wall.post","api_version":self.api_version}}
+                "photo_id":int(photo_id),"attachment":attachment,
+                "provenance":{"api":["photos.getWallUploadServer","multipart_upload","photos.saveWallPhoto","wall.post"],
+                              "api_version":self.api_version,"artifact_id":artifact.get("artifact_id"),
+                              "artifact_hash":artifact.get("content_hash"),"mime_type":mime}}
 
     def fetch_measurement(self, payload):
         external_id=str(payload.get("external_id") or "")
