@@ -107,3 +107,28 @@ The production server is designed to run as an autonomous control loop:
 - runtime secrets remain outside Git.
 
 The GitHub repository remains private. The server-side updater therefore never downloads source through a public archive URL; it requires its dedicated repository read key. GitHub deploy keys are repository-scoped and can be read-only.
+
+
+## GLOBAL FACTORY 2
+
+The repository now contains the first working GLOBAL FACTORY 2 control-plane layer (0.1.0) on top of the existing CHUMA execution core.
+
+### Owner experience
+- one Owner login;
+- one-button START / PAUSE / EMERGENCY STOP;
+- Growth Fund with explicit balance and future spending limits;
+- autonomy levels 0–4;
+- dashboard for IP, content, publications and connected platforms;
+- owner attention is minimized.
+
+### Platform safety
+- social credentials/passwords are never stored by Factory 2;
+- connections are designed around official OAuth/API flows;
+- platform compliance is fail-closed;
+- unknown/unverified platforms default to YELLOW / OWNER_REVIEW;
+- Factory 2 does not use VPN as a mechanism to bypass legal restrictions.
+
+### Runtime
+Set GLOBAL_FACTORY_2=true to run the new control plane through the existing Docker entrypoint. The persistent control database is stored under CHUMA_DATA_DIR; the existing CHUMA content/job engine remains the execution core.
+
+The first release intentionally prioritizes a safe autonomous control surface over automatic external social publication. External platform adapters are enabled only after their official authorization and current compliance status are explicitly configured.
