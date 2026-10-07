@@ -49,9 +49,8 @@ systemctl enable --now chuma-agent.service chuma-auto-update.service chuma-watch
 systemctl enable --now chuma-backup.timer chuma-control.timer
 systemctl enable --now chuma-job-dispatcher.service chuma-dev.service
 
-# The first deployment is deliberately stable: the auto-updater is kept installed,
-# but it must not compete with the just-validated /opt/chuma deployment until a
-# provider-independent update channel is explicitly configured.
+# The autonomous updater is installed and enabled by default. It uses the
+# provider-independent HTTPS GitHub channel and a strict CI/release gate.
 mkdir -p "$APP_ROOT/control/state"
 printf '%s\n' "installed" > "$APP_ROOT/control/state/agent-install.ok"
 chmod 600 "$APP_ROOT/control/state/agent-install.ok"
