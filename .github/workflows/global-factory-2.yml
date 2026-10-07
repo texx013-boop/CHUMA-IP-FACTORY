@@ -1,6 +1,7 @@
 name: GLOBAL FACTORY 2 CI
 
 on:
+  workflow_dispatch:
   push:
     branches: [main]
   pull_request:
