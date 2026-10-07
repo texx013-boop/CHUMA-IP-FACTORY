@@ -151,6 +151,30 @@ class Factory2:
         self.commit()
         return {"distribution_id":distribution_id,"measurement_mode":"external","metrics":clean,"learning":decision}
 
+    def poll_external_measurement(self, owner, distribution_id):
+        row=self.one("SELECT * FROM gf_distributions WHERE id=? AND owner_id=?",(distribution_id,owner))
+        if not row:
+            raise ValueError("distribution_not_found")
+        if row["state"]!="PUBLISHED":
+            raise ValueError("distribution_not_published")
+        published=json.loads(row["result_json"] or "{}")
+        external_id=published.get("external_id")
+        if not external_id:
+            raise ExternalProviderError("external_id_missing")
+        adapter=self.distribution_adapter(row["platform"])
+        try:
+            metrics=adapter.fetch_measurement({"external_id":external_id,
+                                              "account_id":row["account_id"],
+                                              "credential_ref":row["credential_ref"]})
+            if not isinstance(metrics,dict):
+                raise ExternalProviderError("invalid_measurement_payload")
+            return self.record_external_measurement(owner,distribution_id,metrics,
+                                                    confidence=float(metrics.get("confidence",0.8)))
+        except ExternalProviderError:
+            raise
+        except Exception as exc:
+            raise ExternalProviderError("provider_measurement_failed") from exc
+
     def close(self):
         self.chuma.store.close()
         self.db.close()
