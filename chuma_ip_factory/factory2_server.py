@@ -8,7 +8,16 @@ from .factory2_ui import send_html
 class Handler(BaseHTTPRequestHandler):
     service=None
     def json(self,status,obj):
-        b=json.dumps(obj,ensure_ascii=False).encode(); self.send_response(status); self.send_header("Content-Type","application/json; charset=utf-8"); self.send_header("Cache-Control","no-store"); self.send_header("Content-Length",str(len(b))); self.end_headers(); self.wfile.write(b)
+        b=json.dumps(obj,ensure_ascii=False).encode()
+        self.send_response(status)
+        self.send_header("Content-Type","application/json; charset=utf-8")
+        self.send_header("Cache-Control","no-store")
+        self.send_header("X-Content-Type-Options","nosniff")
+        self.send_header("X-Frame-Options","DENY")
+        self.send_header("Referrer-Policy","no-referrer")
+        self.send_header("Content-Length",str(len(b)))
+        self.end_headers()
+        self.wfile.write(b)
     def owner(self):
         v=self.headers.get("Authorization","")
         return self.service.owner_from_token(v[7:].strip()) if v.startswith("Bearer ") else None
@@ -65,7 +74,14 @@ class Handler(BaseHTTPRequestHandler):
 def _worker(service, stop):
     while not stop.is_set():
         try:
-            row=service.one("SELECT job_id FROM jobs WHERE status='QUEUED' AND next_run_at<=? ORDER BY created_at LIMIT 1",(int(time.time()),))
+            row=service.one("""SELECT j.job_id
+                FROM jobs j
+                JOIN gf_settings s ON s.owner_id=j.owner_id
+                WHERE j.status='QUEUED'
+                  AND j.next_run_at<=?
+                  AND s.running=1
+                  AND s.safe_mode=0
+                ORDER BY j.created_at LIMIT 1""",(int(time.time()),))
             if row:
                 service.chuma.run_job(row["job_id"])
                 continue
