@@ -98,7 +98,19 @@ class Factory2:
         if not connection or connection["status"]!="READY" or not connection["credential_ref"]:
             self.db.execute("UPDATE gf_distributions SET state='BLOCKED_AUTH',updated_at=? WHERE id=?",(now(),distribution_id)); self.commit()
             raise ValueError("distribution_blocked_auth")
-        result=self.distribution_adapter(row["platform"]).publish({"content_id":row["content_id"],"account_id":connection["account_id"],"credential_ref":connection["credential_ref"]})
+        adapter=self.distribution_adapter(row["platform"])
+        try:
+            result=adapter.publish({"content_id":row["content_id"],"account_id":connection["account_id"],"credential_ref":connection["credential_ref"]})
+        except Exception as exc:
+            self.db.execute("UPDATE gf_distributions SET state='FAILED',result_json=?,updated_at=? WHERE id=?",
+                            (json.dumps({"error":type(exc).__name__,"message":"provider_publish_failed"},ensure_ascii=False),now(),distribution_id))
+            self.commit()
+            raise ExternalProviderError("provider_publish_failed") from exc
+        if result.get("state") not in ("SUBMITTED","PUBLISHED","FAILED"):
+            self.db.execute("UPDATE gf_distributions SET state='FAILED',result_json=?,updated_at=? WHERE id=?",
+                            (json.dumps({"error":"invalid_provider_state"},ensure_ascii=False),now(),distribution_id))
+            self.commit()
+            raise ExternalProviderError("invalid_provider_state")
         next_state=result["state"]
         self.db.execute("UPDATE gf_distributions SET state=?,result_json=?,updated_at=? WHERE id=?",
                         (next_state,json.dumps(result,ensure_ascii=False),now(),distribution_id))
@@ -485,10 +497,25 @@ class Factory2:
         return {"platform":platform,"status":status,"legal_class":legal,"connection_method":"OAUTH/API","note":note}
 
 class ExternalDistributionAdapter:
-    """Safe provider contract. Concrete adapters must use official OAuth/API only."""
+    """Fail-closed provider contract. Concrete adapters must use official OAuth/API only."""
     mode="adapter_stub"
+    capabilities={"publish":False,"measurement":False}
     def __init__(self, platform): self.platform=platform
+    def metadata(self):
+        return {"platform":self.platform,"mode":self.mode,"capabilities":dict(self.capabilities)}
     def publish(self, payload):
+        # The base adapter must never claim a real publication.
         return {"state":"SUBMITTED","provider":self.platform,"mode":self.mode,"external_id":None}
+    def fetch_measurement(self, payload):
+        raise NotImplementedError("measurement_adapter_not_configured")
+
+class ExternalProviderError(Exception):
+    pass
 
 EXTERNAL_ADAPTERS = {}
+
+def register_external_adapter(platform, adapter_cls):
+    key=str(platform or "").strip().lower()
+    if not key or not issubclass(adapter_cls, ExternalDistributionAdapter):
+        raise ValueError("invalid_external_adapter")
+    EXTERNAL_ADAPTERS[key]=adapter_cls
