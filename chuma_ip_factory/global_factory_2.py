@@ -50,7 +50,11 @@ class Factory2:
                         (owner, str(platform).strip().lower()))
 
     def distribution_adapter(self, platform):
-        return ExternalDistributionAdapter(str(platform).strip().lower())
+        platform=str(platform).strip().lower()
+        adapter=EXTERNAL_ADAPTERS.get(platform)
+        if adapter is None:
+            return ExternalDistributionAdapter(platform)
+        return adapter(platform)
 
     def prepare_distribution(self, owner, content_id, platform, experiment_id=None):
         platform=str(platform or "").strip().lower()
@@ -458,6 +462,10 @@ class Factory2:
         return {"platform":platform,"status":status,"legal_class":legal,"connection_method":"OAUTH/API","note":note}
 
 class ExternalDistributionAdapter:
+    """Safe provider contract. Concrete adapters must use official OAuth/API only."""
+    mode="adapter_stub"
     def __init__(self, platform): self.platform=platform
     def publish(self, payload):
-        return {"state":"SUBMITTED","provider":self.platform,"mode":"adapter_stub","external_id":None}
+        return {"state":"SUBMITTED","provider":self.platform,"mode":self.mode,"external_id":None}
+
+EXTERNAL_ADAPTERS = {}
