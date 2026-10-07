@@ -22,9 +22,16 @@ class Handler(BaseHTTPRequestHandler):
         v=self.headers.get("Authorization","")
         return self.service.owner_from_token(v[7:].strip()) if v.startswith("Bearer ") else None
     def body(self):
-        n=int(self.headers.get("Content-Length","0"))
+        try:
+            n=int(self.headers.get("Content-Length","0"))
+        except (TypeError, ValueError):
+            raise ValueError("invalid_content_length")
+        if n < 0: raise ValueError("invalid_content_length")
         if n>1024*1024: raise ValueError("payload_too_large")
-        return json.loads(self.rfile.read(n) or "{}")
+        try:
+            return json.loads(self.rfile.read(n) or "{}")
+        except json.JSONDecodeError as exc:
+            raise ValueError("invalid_json") from exc
     def do_GET(self):
         p=urlsplit(self.path).path
         if p in ("/","/factory2"): return send_html(self)
@@ -101,10 +108,11 @@ class Handler(BaseHTTPRequestHandler):
                 cid=str(data.get("character_id","")).strip()
                 return self.json(202,self.service.run_growth_step(o,cid))
             return self.json(404,{"error":"not_found"})
-        except ValueError as e: return self.json(400,{"error":str(e)})
+        except ValueError as e:
+            return self.json(400,{"error":str(e)})
         except Exception as e:
             print("GLOBAL FACTORY 2:",type(e).__name__,flush=True)
-            return self.json(400,{"error":"request_failed"})
+            return self.json(500,{"error":"internal_error"})
 def _worker(service, stop):
     while not stop.is_set():
         try:
