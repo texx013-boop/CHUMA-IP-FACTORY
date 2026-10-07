@@ -523,3 +523,29 @@ def test_factory2_distribution_claim_prevents_second_submit_while_publishing():
         result=f.submit_distribution(owner,d["id"])
         assert result["state"]=="PUBLISHING"
         f.close()
+
+
+def test_factory2_http_body_rejects_non_object_json():
+    from io import BytesIO
+    from chuma_ip_factory.factory2_server import Handler
+    h=object.__new__(Handler)
+    h.headers={"Content-Length":"5"}
+    h.rfile=BytesIO(b"[1,2]")
+    try:
+        h.body()
+        assert False
+    except ValueError as exc:
+        assert str(exc)=="invalid_json"
+
+
+def test_factory2_http_body_rejects_malformed_json():
+    from io import BytesIO
+    from chuma_ip_factory.factory2_server import Handler
+    h=object.__new__(Handler)
+    h.headers={"Content-Length":"3"}
+    h.rfile=BytesIO(b"{x")
+    try:
+        h.body()
+        assert False
+    except ValueError as exc:
+        assert str(exc)=="invalid_json"
