@@ -292,3 +292,16 @@ def test_factory2_auth_guard_locks_after_five_failures_and_resets_on_success():
         assert f.auth_guard_check(key) is True
         assert f.verify("owner","password123")==owner
         f.close()
+
+def test_factory2_session_token_is_not_persisted_in_plaintext():
+    with tempfile.TemporaryDirectory() as td:
+        db=Path(td)/"factory.db"
+        f=Factory2(db, Path(td)/"media")
+        owner=f.create_owner("owner","password123")
+        token=f.session(owner)
+        stored=f.one("SELECT token FROM gf_sessions WHERE owner_id=?",(owner,))["token"]
+        assert stored != token
+        assert len(stored)==64
+        assert f.owner_from_token(token)==owner
+        assert f.owner_from_token("invalid-token") is None
+        f.close()
