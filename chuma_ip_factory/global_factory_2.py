@@ -107,7 +107,9 @@ class Factory2:
         self.event(owner,"SETTINGS_UPDATED",patch); return self.dashboard(owner)
     def connect_platform(self, owner, platform):
         # Credentials/passwords are deliberately never accepted or stored here.
-        allowed={"youtube":"GREEN","x":"YELLOW","instagram":"YELLOW","tiktok":"YELLOW","telegram":"GREEN","vk":"GREEN"}
+        # Compliance is fail-closed: a platform is not GREEN merely because it has an API.
+        # GREEN must be explicitly approved/updated for the current jurisdiction and action.
+        allowed={}
         legal=allowed.get(platform.lower(),"YELLOW")
         status="READY" if legal=="GREEN" else "OWNER_REVIEW"
         note=("Official API/OAuth connection required." if legal=="GREEN" else "Legal/platform status or action requires owner review before automation.")
