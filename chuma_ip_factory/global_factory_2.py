@@ -648,14 +648,16 @@ class VKOfficialAdapter(ExternalDistributionAdapter):
             raise ExternalProviderError("provider_upload_url_missing")
         uploaded=self.upload_multipart(upload_url,artifact["storage_path"],mime)
 
-        saved=self.request("photos.saveWallPhoto",{
+        save_params={
             "owner_id":owner_id,
-            "user_id":upload_server.get("user_id"),
             "photo":uploaded.get("photo"),
             "server":uploaded.get("server"),
             "hash":uploaded.get("hash"),
             "caption":text[:2048],
-        },token)
+        }
+        if upload_server.get("user_id") is not None:
+            save_params["user_id"]=upload_server["user_id"]
+        saved=self.request("photos.saveWallPhoto",save_params,token)
         photo=saved[0] if isinstance(saved,list) and saved else {}
         photo_id=photo.get("id")
         photo_owner=photo.get("owner_id",owner_id)
