@@ -10,8 +10,8 @@ REPO="${CHUMA_UPDATE_REPO:-https://github.com/texx013-boop/CHUMA-IP-FACTORY.git}
 BRANCH="${CHUMA_UPDATE_BRANCH:-main}"
 INTERVAL="${CHUMA_UPDATE_INTERVAL:-60}"
 AUTO_UPDATE="${CHUMA_AUTO_UPDATE:-true}"
-# GitHub CI is advisory by default; set true for a strict release gate.
-REQUIRE_CI_GREEN="${CHUMA_REQUIRE_CI_GREEN:-false}"
+# Require both repository CI and Server Handoff validation before deployment.
+REQUIRE_CI_GREEN="${CHUMA_REQUIRE_CI_GREEN:-true}"
 LOCK_FILE="${STATE_DIR}/update.lock"
 LOG_FILE="${STATE_DIR}/update.log"
 ENV_FILE="${APP_ROOT}/infra/.env"
@@ -204,7 +204,7 @@ while true; do
   trap cleanup EXIT
 
   if ! git clone --quiet --depth 1 --branch "$BRANCH" "$REPO" "$TMP/repo"; then
-    log "private repository access failed"
+    log "GitHub repository access failed"
     trap - EXIT; cleanup; sleep "$INTERVAL"; continue
   fi
 
