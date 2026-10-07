@@ -94,8 +94,12 @@ class Factory2:
             self.db.execute("UPDATE gf_distributions SET state='BLOCKED_AUTH',updated_at=? WHERE id=?",(now(),distribution_id)); self.commit()
             raise ValueError("distribution_blocked_auth")
         result=self.distribution_adapter(row["platform"]).publish({"content_id":row["content_id"],"account_id":connection["account_id"],"credential_ref":connection["credential_ref"]})
+        next_state=result["state"]
         self.db.execute("UPDATE gf_distributions SET state=?,result_json=?,updated_at=? WHERE id=?",
-                        (result["state"],json.dumps(result,ensure_ascii=False),now(),distribution_id))
+                        (next_state,json.dumps(result,ensure_ascii=False),now(),distribution_id))
+        if row["experiment_id"] and next_state in ("SUBMITTED","PUBLISHED"):
+            self.db.execute("UPDATE gf_experiments SET status='AWAITING_MEASUREMENT',updated_at=? WHERE id=? AND owner_id=?",
+                            (now(),row["experiment_id"],owner))
         self.commit()
         return dict(self.one("SELECT * FROM gf_distributions WHERE id=?",(distribution_id,)))
 
@@ -110,8 +114,14 @@ class Factory2:
             self.record_signal(owner,exp["character_id"],kind,value,row["content_id"],confidence,"external")
         self.db.execute("UPDATE gf_distributions SET result_json=?,updated_at=? WHERE id=?",
                         (json.dumps({"metrics":clean,"measurement_mode":"external"},ensure_ascii=False),now(),distribution_id))
+        decision=self.learn_from_signal(owner,exp["character_id"])
+        if row["experiment_id"]:
+            self.db.execute("UPDATE gf_experiments SET status='MEASURED',result_json=?,updated_at=? WHERE id=? AND owner_id=?",
+                            (json.dumps({"distribution_id":distribution_id,"measurement_mode":"external",
+                                         "metrics":clean,"decision_id":(decision or {}).get("decision_id")},ensure_ascii=False),
+                             now(),row["experiment_id"],owner))
         self.commit()
-        return {"distribution_id":distribution_id,"measurement_mode":"external","metrics":clean}
+        return {"distribution_id":distribution_id,"measurement_mode":"external","metrics":clean,"learning":decision}
 
 class ExternalDistributionAdapter:
     def __init__(self, platform): self.platform=platform
