@@ -160,7 +160,7 @@ def test_factory2_compliance_registry_is_fail_closed_and_expiring():
         rule=f.set_compliance_rule(owner,"example-platform","publish","RU","GREEN",True,source="owner_review",note="test rule")
         assert rule["legal_class"]=="GREEN"
         assert rule["automation_allowed"]==1
-        assert f.connect_platform(owner,"example-platform")["status"]=="READY"
+        assert f.connect_platform(owner,"example-platform",account_id="acct-1",credential_ref="secret-manager://example/account-1")["status"]=="READY"
         f.set_compliance_rule(owner,"example-platform","publish","RU","RED",False,source="owner_review",note="closed")
         assert f.connect_platform(owner,"example-platform")["status"]=="OWNER_REVIEW"
         f.close()
@@ -250,4 +250,17 @@ def test_factory2_distribution_moves_experiment_to_measurement_then_learning():
         assert m["measurement_mode"]=="external"
         assert f.one("SELECT status FROM gf_experiments WHERE id=?",(eid,))["status"]=="MEASURED"
         assert m["learning"] is not None
+        f.close()
+
+
+def test_factory2_ready_connection_rejects_raw_credential():
+    with tempfile.TemporaryDirectory() as td:
+        f=Factory2(Path(td)/"factory.db", Path(td)/"media")
+        owner=f.create_owner("owner","password123")
+        f.set_compliance_rule(owner,"example-platform","publish","RU","GREEN",True,source="test",note="allowed")
+        try:
+            f.connect_platform(owner,"example-platform",account_id="acct-1",credential_ref="raw-token-value")
+            assert False
+        except ValueError as e:
+            assert str(e)=="credential_ref_must_be_reference"
         f.close()
