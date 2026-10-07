@@ -95,3 +95,12 @@ Owner should ultimately need only: login → connect approved services → optio
 - Added regression coverage for raw credential rejection.
 - Latest saved code/test commits: `e3e28a3e2806adeace5728240cc8dcd337605466`, `2ea42e3e36c0b6b56b2966237cf91af240582b5b`, `f093d686b288668cc137858af11940374cdd7d9d`.
 - GitHub workflow status is not claimed because the available workflow-run endpoint does not expose push-triggered runs for these commits. The saved source is the final reviewed checkpoint for this block.
+
+
+## 2026-10-08 — Provider Adapter Boundary Finalized
+- Added an explicit provider adapter registry.
+- Unregistered providers always fall back to the non-network safe adapter; no hidden provider selection or network publishing exists.
+- The adapter contract is now the stable integration point for future official OAuth/API providers.
+- Added regression coverage proving the fallback adapter cannot produce an external ID or real publication.
+- Latest code/test commits: `ae87784209a2d32091472711cf308ee2723df58e`, `3bd21a1e597ef9924623a87380e9ecacf6741cad`.
+- Real server deployment was not attempted because the connected remote device was unavailable and the execution environment has no outbound network access.
