@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS gf_signals(id TEXT PRIMARY KEY, owner_id TEXT NOT NUL
 CREATE TABLE IF NOT EXISTS gf_decisions(id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, character_id TEXT, problem TEXT NOT NULL, decision TEXT NOT NULL, evidence_json TEXT NOT NULL, lesson TEXT NOT NULL, created_at INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS gf_ip_health(character_id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, identity REAL NOT NULL, content REAL NOT NULL, audience REAL NOT NULL, learning REAL NOT NULL, economics REAL NOT NULL, total REAL NOT NULL, updated_at INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS gf_sessions(token TEXT PRIMARY KEY, owner_id TEXT NOT NULL, expires_at INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS gf_auth_guard(key TEXT PRIMARY KEY, failures INTEGER NOT NULL DEFAULT 0, locked_until INTEGER NOT NULL DEFAULT 0, updated_at INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS gf_spend_ledger(id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, category TEXT NOT NULL, amount REAL NOT NULL, ip_id TEXT, approved INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL, note TEXT NOT NULL, created_at INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS gf_notifications(id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, level TEXT NOT NULL, kind TEXT NOT NULL, title TEXT NOT NULL, detail TEXT NOT NULL, acknowledged INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS gf_attention(id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, character_id TEXT, priority INTEGER NOT NULL, kind TEXT NOT NULL, title TEXT NOT NULL, detail TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'OPEN', created_at INTEGER NOT NULL, resolved_at INTEGER);
@@ -149,6 +150,24 @@ class Factory2:
         self.commit()
         self.event(owner,"OWNER_CREATED",{"username":username})
         return owner
+    def auth_guard_check(self, key):
+        row=self.one("SELECT failures,locked_until FROM gf_auth_guard WHERE key=?",(key,))
+        if row and int(row["locked_until"])>now():
+            return False
+        return True
+
+    def auth_guard_failure(self, key):
+        row=self.one("SELECT failures FROM gf_auth_guard WHERE key=?",(key,))
+        failures=(int(row["failures"]) if row else 0)+1
+        lock=now()+300 if failures>=5 else 0
+        self.db.execute("INSERT OR REPLACE INTO gf_auth_guard(key,failures,locked_until,updated_at) VALUES(?,?,?,?)",
+                        (key,failures,lock,now()))
+        self.commit()
+
+    def auth_guard_success(self, key):
+        self.db.execute("DELETE FROM gf_auth_guard WHERE key=?",(key,))
+        self.commit()
+
     def verify(self, username, password):
         import hashlib, hmac
         row=self.one("SELECT owner_id,password_hash FROM gf_users WHERE username=?",(username,))
