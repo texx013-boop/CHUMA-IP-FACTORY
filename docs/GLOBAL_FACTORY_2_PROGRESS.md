@@ -129,3 +129,18 @@ Owner should ultimately need only: login → connect approved services → optio
 - Added regression coverage for the provider contract.
 - Source/test checkpoint: `27b7894e4b4560759408be3d5dd82c44badeaee3`, `6e98e0ffb302cd0ec87675a903af3b24f50fb867`.
 - CI workflow status remains unobservable for this push; no successful CI claim made.
+
+
+## 2026-10-08 — First concrete official provider: VK API
+- Current Russian advertising restrictions were rechecked before selecting the first concrete channel. Instagram/Facebook were excluded from the first production path because current Russian advertising restrictions apply to those resources; Factory 2 will not use VPN or other bypasses to automate them.
+- Added a concrete **VK official API adapter** with capability metadata for publishing and post-level measurement.
+- Publication uses the official `wall.post` API and returns a real VK post identifier when the official API succeeds.
+- Measurement uses the official `wall.getById` API and extracts views, likes, comments and reposts as external metrics.
+- Tokens are never stored in the Factory 2 database. The database keeps only the credential reference; runtime secret resolution is isolated to the process environment.
+- Provider failures are fail-closed and sanitized.
+- Added automatic external measurement polling: `SUBMITTED/PUBLISHED → MEASURED` through the provider adapter, with learning after verified measurement.
+- Added HTTP endpoint `/factory2/api/distribution/poll`.
+- Added regression tests for provider capabilities, secret-reference handling, publication contract, measurement parsing and fail-closed behavior.
+- **VK automation is not enabled by default.** Compliance remains YELLOW until an owner-reviewed current rule explicitly permits the required action in the relevant jurisdiction.
+- This block does not claim a real publication or live VK smoke test; no production token was used and the execution environment still has no outbound network access.
+- Source checkpoints: 92910f11ed153ff7292c5c8bb0e9da0e98b2014f, b1c4ba47d066e8474ecd22e1ef87c5999388cd59, 1a04d869e0fafa900de79a76388551944e199eae, 222330a874b29e5bc42d4bb773b493fd53dc793b, 88527b65d9331a308dea244147a68338995ffb42.
