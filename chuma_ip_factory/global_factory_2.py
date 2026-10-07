@@ -46,6 +46,24 @@ class Factory2:
         if "credential_ref" not in cols:
             self.db.execute("ALTER TABLE gf_platforms ADD COLUMN credential_ref TEXT")
 
+    def _artifact_for_distribution(self, owner, content_id):
+        artifact=self.chuma.store.one(
+            "SELECT artifact_id,variant,mime_type,storage_path,content_hash,provider,status "
+            "FROM artifacts WHERE owner_id=? AND content_id=? AND status='READY' "
+            "ORDER BY CASE WHEN variant='4:5' THEN 0 WHEN variant='1:1' THEN 1 ELSE 2 END, created_at DESC LIMIT 1",
+            (owner,content_id))
+        if not artifact:
+            raise ExternalProviderError("content_artifact_missing")
+        path=Path(str(artifact["storage_path"] or ""))
+        if not path.is_file():
+            raise ExternalProviderError("artifact_not_found")
+        if not artifact["content_hash"]:
+            raise ExternalProviderError("artifact_hash_missing")
+        actual=hashlib.sha256(path.read_bytes()).hexdigest()
+        if actual != str(artifact["content_hash"]):
+            raise ExternalProviderError("artifact_hash_mismatch")
+        return {k:artifact[k] for k in ("artifact_id","variant","mime_type","storage_path","content_hash","provider","status")}
+
     def _platform_connection(self, owner, platform):
         return self.one("SELECT * FROM gf_platforms WHERE owner_id=? AND platform=? ORDER BY updated_at DESC LIMIT 1",
                         (owner, str(platform).strip().lower()))
@@ -108,17 +126,13 @@ class Factory2:
                     str(idea.get("caption") or "").strip(),
                     str(idea.get("hook") or "").strip()]
         publish_text=next((x for x in text_parts if x), "")
-        artifact=self.chuma.store.one(
-            "SELECT artifact_id,variant,mime_type,storage_path,content_hash,provider,status "
-            "FROM artifacts WHERE owner_id=? AND content_id=? AND status='READY' "
-            "ORDER BY CASE WHEN variant='4:5' THEN 0 WHEN variant='1:1' THEN 1 ELSE 2 END, created_at DESC LIMIT 1",
-            (owner,row["content_id"]))
-        if not artifact:
+        try:
+            artifact_payload=self._artifact_for_distribution(owner,row["content_id"])
+        except ExternalProviderError as exc:
             self.db.execute("UPDATE gf_distributions SET state='FAILED',result_json=?,updated_at=? WHERE id=?",
-                            (json.dumps({"error":"content_artifact_missing"},ensure_ascii=False),now(),distribution_id))
+                            (json.dumps({"error":str(exc)},ensure_ascii=False),now(),distribution_id))
             self.commit()
-            raise ExternalProviderError("content_artifact_missing")
-        artifact_payload={k:artifact[k] for k in ("artifact_id","variant","mime_type","storage_path","content_hash","provider","status")}
+            raise
         try:
             result=adapter.publish({"content_id":row["content_id"],"character_id":content_row["character_id"],
                                     "text":publish_text,"artifact":artifact_payload,
