@@ -52,3 +52,14 @@ External social publishing is intentionally NOT enabled automatically yet.
 Continue in MAX AUTONOMOUS + FINISH mode. Do not return to architecture-only discussion. Implement, test, fix, retest, secure, deploy, verify and save.
 
 Owner should ultimately need only: login → connect approved services → optional fund → START → periodic statistics/review.
+
+
+## 2026-10-07 — Internal Growth Loop Hardening
+- Fixed learning provenance: pending/placeholder signals are ignored by Factory 2 learning.
+- Replaced the old zero-value `awaiting_distribution` learning signal with measured results from the existing local test distribution contour.
+- Factory 2 now records the internal contour explicitly as `measurement.mode=test_fixture` when the built-in test provider is used.
+- Growth experiment lifecycle now records `MEASURED` plus publication and measurement provenance.
+- Mirrored measured views/engagement/follows into Factory 2 signals with explicit `source=test_fixture` or `external`; no test metric is presented as real audience data.
+- Added regression coverage for measured growth learning and protection against placeholder metrics influencing decisions.
+- Code commits: `328d5def7249f4b7f5e6da49f4f3f8ea61ba4901`, tests `f09f1a9864d8f0be3ebee61cb69d7fba0f854210`.
+- External social publishing remains disabled/fail-closed; this block is an internal integration test contour only.
