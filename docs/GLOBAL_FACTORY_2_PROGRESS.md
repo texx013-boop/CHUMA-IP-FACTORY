@@ -209,3 +209,16 @@ Checkpoint: `18b838f987b67ba2f1235dde066dc094438897cb`
 - Session tokens remain stored only as SHA-256 hashes and expire server-side.
 - Remote server verification remains pending because the registered remote development device is currently offline.
 - GitHub Actions currently exposes no workflow run for these commits, so CI PASS is not claimed.
+
+
+## 2026-10-08 — HTTP and verification hardening
+
+Checkpoint after the previous owner-session hardening sequence.
+
+- Hardened the Factory 2 HTTP boundary: malformed JSON and invalid Content-Length are normalized to safe client errors.
+- Unexpected server exceptions now return HTTP 500 with a generic `internal_error` response instead of being mislabeled as HTTP 400.
+- Existing detailed exception names remain server-side only through the process log; they are not exposed to API clients.
+- Added `workflow_dispatch` to the GLOBAL FACTORY 2 CI workflow so the full compile + pytest verification can be started explicitly when GitHub Actions execution is available.
+- Current repository source remains saved on `main`.
+- A live server verification is still not claimed because the registered remote development device is offline.
+- A CI PASS is still not claimed until an actual workflow run reports success.
