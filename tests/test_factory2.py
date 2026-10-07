@@ -316,3 +316,47 @@ def test_factory2_provider_contract_metadata_and_failure_is_fail_closed():
         assert meta["capabilities"]["measurement"] is False
         assert adapter.fetch_measurement if hasattr(adapter,"fetch_measurement") else False
         f.close()
+
+
+def test_factory2_vk_official_adapter_uses_safe_secret_reference_and_real_api_contract():
+    with tempfile.TemporaryDirectory() as td:
+        f=Factory2(Path(td)/"factory.db", Path(td)/"media")
+        adapter=f.distribution_adapter("vk")
+        meta=adapter.metadata()
+        assert meta["mode"]=="official_api"
+        assert meta["capabilities"]=={"publish":True,"measurement":True}
+        ref="oauth://vk/test-account"
+        env_name=adapter._secret_env_name(ref)
+        os.environ[env_name]="test-token"
+        calls=[]
+        def fake_request(method, params, token):
+            calls.append((method, params, token))
+            if method=="wall.post":
+                return {"post_id":123}
+            return {"items":[{"views":{"count":100},"likes":{"count":7},"comments":{"count":2},"reposts":{"count":1}}]}
+        adapter.request=fake_request
+        published=adapter.publish({"account_id":"-42","credential_ref":ref,"text":"hello"})
+        assert published["state"]=="PUBLISHED"
+        assert published["external_id"]=="-42_123"
+        measured=adapter.fetch_measurement({"external_id":"-42_123","credential_ref":ref})
+        assert measured["views"]==100.0
+        assert measured["likes"]==7.0
+        assert measured["comments"]==2.0
+        assert measured["shares"]==1.0
+        assert calls[0][0]=="wall.post"
+        assert calls[0][2]=="test-token"
+        del os.environ[env_name]
+        f.close()
+
+
+def test_factory2_vk_provider_fails_closed_without_runtime_secret():
+    with tempfile.TemporaryDirectory() as td:
+        f=Factory2(Path(td)/"factory.db", Path(td)/"media")
+        adapter=f.distribution_adapter("vk")
+        ref="oauth://vk/missing"
+        try:
+            adapter.publish({"account_id":"-42","credential_ref":ref,"text":"hello"})
+            assert False
+        except ExternalProviderError as exc:
+            assert str(exc)=="credential_resolution_unavailable"
+        f.close()
