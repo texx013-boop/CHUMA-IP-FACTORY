@@ -66,6 +66,15 @@ class Handler(BaseHTTPRequestHandler):
             if p=="/factory2/api/platform":
                 return self.json(200,self.service.connect_platform(o,str(data.get("platform","")).strip(),
                     data.get("account_id"),data.get("credential_ref")))
+            if p=="/factory2/api/distribution/prepare":
+                return self.json(201,self.service.prepare_distribution(o,str(data.get("content_id","")).strip(),
+                    str(data.get("platform","")).strip(),data.get("experiment_id")))
+            if p=="/factory2/api/distribution/submit":
+                return self.json(200,self.service.submit_distribution(o,str(data.get("distribution_id","")).strip()))
+            if p=="/factory2/api/distribution/measurement":
+                return self.json(200,self.service.record_external_measurement(
+                    o,str(data.get("distribution_id","")).strip(),data.get("metrics") or {},
+                    float(data.get("confidence",0.5))))
             if p=="/factory2/api/compliance":
                 return self.json(200,self.service.set_compliance_rule(
                     o,str(data.get("platform","")).strip(),str(data.get("action","publish")).strip(),
