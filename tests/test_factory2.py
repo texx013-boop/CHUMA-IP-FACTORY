@@ -264,3 +264,14 @@ def test_factory2_ready_connection_rejects_raw_credential():
         except ValueError as e:
             assert str(e)=="credential_ref_must_be_reference"
         f.close()
+
+
+def test_factory2_unknown_provider_uses_safe_adapter_contract_only():
+    with tempfile.TemporaryDirectory() as td:
+        f=Factory2(Path(td)/"factory.db", Path(td)/"media")
+        adapter=f.distribution_adapter("not-registered")
+        result=adapter.publish({"content_id":"x","credential_ref":"secret-manager://x"})
+        assert result["mode"]=="adapter_stub"
+        assert result["external_id"] is None
+        assert result["state"]=="SUBMITTED"
+        f.close()
