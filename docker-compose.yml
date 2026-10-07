@@ -24,6 +24,7 @@ services:
         condition: service_healthy
     environment:
       CHUMA_HOST: 0.0.0.0
+      GLOBAL_FACTORY_2: ${GLOBAL_FACTORY_2:-true}
       PORT: 8097
       DATABASE_URL: postgresql://chuma:${POSTGRES_PASSWORD:-chuma-local-change-me}@db:5432/chuma
       CHUMA_DATA_DIR: /data
