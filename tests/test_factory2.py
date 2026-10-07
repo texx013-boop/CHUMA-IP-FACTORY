@@ -361,3 +361,20 @@ def test_factory2_vk_provider_fails_closed_without_runtime_secret():
         except ExternalProviderError as exc:
             assert str(exc)=="credential_resolution_unavailable"
         f.close()
+
+
+def test_factory2_distribution_requires_verified_artifact_before_provider_publish():
+    with tempfile.TemporaryDirectory() as td:
+        f=Factory2(Path(td)/"factory.db", Path(td)/"media")
+        owner=f.create_owner("owner","password123")
+        cid=f.bootstrap_character(owner,"Test IP")
+        eid=f.create_experiment(owner,cid,"artifact gate")
+        f.set_compliance_rule(owner,"vk","publish","RU","GREEN",True,source="test",note="provider contract")
+        f.connect_platform(owner,"vk",account_id="-42",credential_ref="oauth://vk/test")
+        d=f.prepare_distribution(owner,"content-x","vk",experiment_id=eid)
+        try:
+            f.submit_distribution(owner,d["id"])
+            assert False
+        except ExternalProviderError as exc:
+            assert str(exc)=="content_not_found"
+        f.close()
