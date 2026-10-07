@@ -153,3 +153,25 @@ Owner should ultimately need only: login → connect approved services → optio
 - Added regression coverage for the publication artifact boundary.
 - This intentionally does **not** claim that VK image upload itself is complete yet: the next block is the official VK photo-upload sequence (`photos.getWallUploadServer` → upload → `photos.saveWallPhoto` → `wall.post`) followed by mocked integration tests.
 - Saved checkpoint: `31f6e05673f50166dcebb10da915d88ca0cf221f`, tests `2713778c7289130a0111df4c24a7ed423199b828`.
+
+
+## 2026-10-08 — Official VK image publication contour
+
+Checkpoint: `821c45631bbd25143db7776e58126b2cef959370`
+
+Completed:
+- VK provider now uses the official image publication sequence:
+  `photos.getWallUploadServer` → multipart image upload → `photos.saveWallPhoto` → `wall.post` with a `photo{owner_id}_{photo_id}` attachment.
+- Publication is fail-closed on missing/not-ready/missing-file/unsupported-MIME/hash-mismatch artifacts.
+- Artifact SHA-256 is verified immediately before provider upload.
+- Provider provenance records the artifact ID/hash, MIME type, API methods and API version.
+- Runtime credentials remain reference-only; the access token is resolved from the runtime environment and is never stored in the Factory 2 database.
+- Added regression coverage for the complete mocked VK image sequence, artifact tampering, and missing verified artifact.
+- The existing Factory 2 distribution idempotency key remains the duplication guard at the control-plane boundary.
+- Measurement polling remains connected to the published VK post through `wall.getById`.
+
+Verification status:
+- Code and regression tests were added and saved to GitHub.
+- GitHub Actions currently reports no workflow run for this commit, so CI PASS is not claimed.
+- No live VK token, live publication, or live external measurement smoke test was performed.
+- Current implementation is ready for a controlled live OAuth/API smoke test once an owner-approved VK connection is available.
