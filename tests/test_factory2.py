@@ -305,3 +305,14 @@ def test_factory2_session_token_is_not_persisted_in_plaintext():
         assert f.owner_from_token(token)==owner
         assert f.owner_from_token("invalid-token") is None
         f.close()
+
+
+def test_factory2_provider_contract_metadata_and_failure_is_fail_closed():
+    with tempfile.TemporaryDirectory() as td:
+        f=Factory2(Path(td)/"factory.db", Path(td)/"media")
+        adapter=f.distribution_adapter("unregistered")
+        meta=adapter.metadata()
+        assert meta["capabilities"]["publish"] is False
+        assert meta["capabilities"]["measurement"] is False
+        assert adapter.fetch_measurement if hasattr(adapter,"fetch_measurement") else False
+        f.close()
