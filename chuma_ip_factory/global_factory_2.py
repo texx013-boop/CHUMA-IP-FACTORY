@@ -128,6 +128,9 @@ class Factory2:
         content_row=self.chuma.store.one("SELECT idea_json,character_id FROM content WHERE content_id=? AND owner_id=?",
                                           (row["content_id"],owner))
         if not content_row:
+            self.db.execute("UPDATE gf_distributions SET state='FAILED',result_json=?,updated_at=? WHERE id=?",
+                            (json.dumps({"error":"content_not_found"},ensure_ascii=False),now(),distribution_id))
+            self.commit()
             raise ValueError("content_not_found")
         idea=json.loads(content_row["idea_json"] or "{}")
         text_parts=[str(idea.get("text") or "").strip(),
