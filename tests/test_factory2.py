@@ -88,3 +88,29 @@ def test_factory2_spend_limits_and_approval():
         except ValueError as e:
             assert str(e)=="daily_spend_limit"
         f.close()
+
+
+def test_factory2_attention_and_learning():
+    with tempfile.TemporaryDirectory() as td:
+        f=Factory2(Path(td)/"factory.db", Path(td)/"media")
+        owner=f.create_owner("owner","password123")
+        cid=f.bootstrap_character(owner,"Test IP")
+        f.record_signal(owner,cid,"engagement",0.2,confidence=0.8)
+        decision=f.learn_from_signal(owner,cid)
+        assert decision["decision"]=="change_hook"
+        d=f.dashboard(owner)
+        assert d["attention"]
+        aid=d["attention"][0]["id"]
+        assert f.resolve_attention(owner,aid) is True
+        assert not f.dashboard(owner)["attention"]
+        f.close()
+
+def test_factory2_start_is_idempotent():
+    with tempfile.TemporaryDirectory() as td:
+        f=Factory2(Path(td)/"factory.db", Path(td)/"media")
+        owner=f.create_owner("owner","password123")
+        first=f.start(owner)
+        second=f.start(owner)
+        assert second["already_running"] is True
+        assert second["job_id"]==first["job_id"]
+        f.close()
