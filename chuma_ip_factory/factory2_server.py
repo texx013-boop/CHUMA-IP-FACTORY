@@ -48,6 +48,15 @@ class Handler(BaseHTTPRequestHandler):
                 x=self.service.fund(o,data.get("amount")); return self.json(200,{"balance":x["balance"],"message":"Баланс пополнен."})
             if p=="/factory2/api/settings": return self.json(200,self.service.settings(o,data))
             if p=="/factory2/api/platform": return self.json(200,self.service.connect_platform(o,str(data.get("platform","")).strip()))
+            if p=="/factory2/api/experiment":
+                cid=str(data.get("character_id","")).strip()
+                return self.json(201,{"experiment_id":self.service.create_experiment(o,cid,str(data.get("hypothesis","")).strip(),str(data.get("target_signal","engagement")))})
+            if p=="/factory2/api/signal":
+                cid=str(data.get("character_id","")).strip()
+                return self.json(201,{"signal_id":self.service.record_signal(o,cid,str(data.get("kind","engagement")),float(data.get("value",0)),data.get("content_id"),float(data.get("confidence",0.5)),str(data.get("source","owner")))})
+            if p=="/factory2/api/growth-step":
+                cid=str(data.get("character_id","")).strip()
+                return self.json(202,self.service.run_growth_step(o,cid))
             return self.json(404,{"error":"not_found"})
         except ValueError as e: return self.json(400,{"error":str(e)})
         except Exception as e:
