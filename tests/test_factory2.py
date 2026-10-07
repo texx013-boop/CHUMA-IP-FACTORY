@@ -179,3 +179,54 @@ def test_factory2_experiment_lifecycle_and_idempotency():
         exp=f.one("SELECT status FROM gf_experiments WHERE id=?",(first,))
         assert exp["status"]=="MEASURED"
         f.close()
+
+
+def test_factory2_distribution_blocks_yellow_and_red_and_requires_auth():
+    with tempfile.TemporaryDirectory() as td:
+        f=Factory2(Path(td)/"factory.db", Path(td)/"media")
+        owner=f.create_owner("owner","password123")
+        f.set_compliance_rule(owner,"yellow-platform","publish","RU","YELLOW",False,source="test",note="review")
+        y=f.prepare_distribution(owner,"content-y","yellow-platform")
+        assert y["state"]=="BLOCKED_COMPLIANCE"
+        f.set_compliance_rule(owner,"red-platform","publish","RU","RED",False,source="test",note="closed")
+        r=f.prepare_distribution(owner,"content-r","red-platform")
+        assert r["state"]=="BLOCKED_COMPLIANCE"
+        f.set_compliance_rule(owner,"green-platform","publish","RU","GREEN",True,source="test",note="allowed")
+        f.connect_platform(owner,"green-platform")
+        blocked=f.prepare_distribution(owner,"content-g","green-platform")
+        assert blocked["state"]=="BLOCKED_AUTH"
+        f.close()
+
+
+def test_factory2_distribution_green_oauth_path_is_idempotent_and_password_free():
+    with tempfile.TemporaryDirectory() as td:
+        f=Factory2(Path(td)/"factory.db", Path(td)/"media")
+        owner=f.create_owner("owner","password123")
+        cid=f.bootstrap_character(owner,"Test IP")
+        f.set_compliance_rule(owner,"green-platform","publish","RU","GREEN",True,source="test",note="allowed")
+        f.connect_platform(owner,"green-platform",account_id="acct-1",credential_ref="secret-manager://green/account-1")
+        d=f.prepare_distribution(owner,"content-g","green-platform")
+        assert d["state"]=="QUEUED"
+        d2=f.prepare_distribution(owner,"content-g","green-platform")
+        assert d2["id"]==d["id"]
+        submitted=f.submit_distribution(owner,d["id"])
+        assert submitted["state"]=="SUBMITTED"
+        assert "password" not in str(dict(f.one("SELECT platform,status,connection_method,account_id,credential_ref,note FROM gf_platforms WHERE owner_id=?",(owner,)))).lower()
+        f.close()
+
+
+def test_factory2_external_measurement_never_uses_fixture_source():
+    with tempfile.TemporaryDirectory() as td:
+        f=Factory2(Path(td)/"factory.db", Path(td)/"media")
+        owner=f.create_owner("owner","password123")
+        cid=f.bootstrap_character(owner,"Test IP")
+        f.set_compliance_rule(owner,"green-platform","publish","RU","GREEN",True,source="test",note="allowed")
+        f.connect_platform(owner,"green-platform",account_id="acct-1",credential_ref="secret-manager://green/account-1")
+        d=f.prepare_distribution(owner,"content-m","green-platform",experiment_id=f.create_experiment(owner,cid,"external measurement"))
+        f.db.execute("UPDATE gf_distributions SET state='PUBLISHED' WHERE id=?",(d["id"],))
+        f.commit()
+        measured=f.record_external_measurement(owner,d["id"],{"views":1000,"engagement":0.42},confidence=0.9)
+        assert measured["measurement_mode"]=="external"
+        sources=[x["source"] for x in f.all("SELECT source FROM gf_signals WHERE content_id=?",( "content-m",))]
+        assert sources and all(x=="external" for x in sources)
+        f.close()
