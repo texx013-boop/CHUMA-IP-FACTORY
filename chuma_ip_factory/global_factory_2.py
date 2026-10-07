@@ -123,11 +123,6 @@ class Factory2:
         self.commit()
         return {"distribution_id":distribution_id,"measurement_mode":"external","metrics":clean,"learning":decision}
 
-class ExternalDistributionAdapter:
-    def __init__(self, platform): self.platform=platform
-    def publish(self, payload):
-        return {"state":"SUBMITTED","provider":self.platform,"mode":"adapter_stub","external_id":None}
-
     def close(self):
         self.chuma.store.close()
         self.db.close()
@@ -456,3 +451,8 @@ class ExternalDistributionAdapter:
             (uid("PLAT"),owner,platform,status,"OAUTH/API",legal,note,now(),now(),str(account_id) if account_id else None,str(credential_ref) if credential_ref else None))
         self.commit(); self.event(owner,"PLATFORM_REGISTERED",{"platform":platform,"legal_class":legal,"status":status})
         return {"platform":platform,"status":status,"legal_class":legal,"connection_method":"OAUTH/API","note":note}
+
+class ExternalDistributionAdapter:
+    def __init__(self, platform): self.platform=platform
+    def publish(self, payload):
+        return {"state":"SUBMITTED","provider":self.platform,"mode":"adapter_stub","external_id":None}
