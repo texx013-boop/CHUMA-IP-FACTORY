@@ -230,3 +230,24 @@ def test_factory2_external_measurement_never_uses_fixture_source():
         sources=[x["source"] for x in f.all("SELECT source FROM gf_signals WHERE content_id=?",( "content-m",))]
         assert sources and all(x=="external" for x in sources)
         f.close()
+
+
+def test_factory2_distribution_moves_experiment_to_measurement_then_learning():
+    with tempfile.TemporaryDirectory() as td:
+        f=Factory2(Path(td)/"factory.db", Path(td)/"media")
+        owner=f.create_owner("owner","password123")
+        cid=f.bootstrap_character(owner,"Test IP")
+        eid=f.create_experiment(owner,cid,"external hook")
+        f.set_compliance_rule(owner,"green-platform","publish","RU","GREEN",True,source="test",note="allowed")
+        f.connect_platform(owner,"green-platform",account_id="acct-1",credential_ref="secret-manager://green/account-1")
+        d=f.prepare_distribution(owner,"content-state","green-platform",experiment_id=eid)
+        submitted=f.submit_distribution(owner,d["id"])
+        assert submitted["state"]=="SUBMITTED"
+        assert f.one("SELECT status FROM gf_experiments WHERE id=?",(eid,))["status"]=="AWAITING_MEASUREMENT"
+        f.db.execute("UPDATE gf_distributions SET state='PUBLISHED' WHERE id=?",(d["id"],))
+        f.commit()
+        m=f.record_external_measurement(owner,d["id"],{"engagement":0.7},confidence=0.9)
+        assert m["measurement_mode"]=="external"
+        assert f.one("SELECT status FROM gf_experiments WHERE id=?",(eid,))["status"]=="MEASURED"
+        assert m["learning"] is not None
+        f.close()
