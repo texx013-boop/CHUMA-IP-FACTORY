@@ -222,3 +222,12 @@ Checkpoint after the previous owner-session hardening sequence.
 - Current repository source remains saved on `main`.
 - A live server verification is still not claimed because the registered remote development device is offline.
 - A CI PASS is still not claimed until an actual workflow run reports success.
+
+
+## 2026-10-08 — JSON request-shape hardening
+
+- Hardened the HTTP request body parser so valid JSON must be a JSON object.
+- JSON arrays, scalars, and malformed JSON now fail closed as `invalid_json` client errors instead of reaching route handlers and producing unexpected internal errors.
+- Added regression tests for non-object and malformed JSON payloads.
+- Source and tests are saved on `main`.
+- Full CI execution and live server verification are still not claimed until an actual workflow run or reachable production environment confirms them.
