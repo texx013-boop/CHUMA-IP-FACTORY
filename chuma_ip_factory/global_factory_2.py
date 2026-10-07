@@ -444,8 +444,13 @@ class Factory2:
             raise ValueError("invalid_platform")
         compliance=self.compliance_status(platform,"publish","RU")
         legal=compliance["legal_class"]
-        status="READY" if legal=="GREEN" and compliance["automation_allowed"] else "OWNER_REVIEW"
-        note=("Official API/OAuth connection required; current compliance rule permits automation."
+        if account_id and credential_ref:
+            ref=str(credential_ref)
+            if not ref.startswith(("secret-manager://","oauth://","vault://")):
+                raise ValueError("credential_ref_must_be_reference")
+        connected=bool(account_id and credential_ref)
+        status="READY" if legal=="GREEN" and compliance["automation_allowed"] and connected else "OWNER_REVIEW"
+        note=("Official API/OAuth connection reference registered; current compliance rule permits automation."
               if status=="READY" else compliance["note"])
         self.db.execute("INSERT OR REPLACE INTO gf_platforms(id,owner_id,platform,status,connection_method,legal_class,note,created_at,updated_at,account_id,credential_ref) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
             (uid("PLAT"),owner,platform,status,"OAUTH/API",legal,note,now(),now(),str(account_id) if account_id else None,str(credential_ref) if credential_ref else None))
