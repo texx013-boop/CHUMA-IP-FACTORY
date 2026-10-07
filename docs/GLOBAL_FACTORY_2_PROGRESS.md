@@ -74,3 +74,15 @@ Owner should ultimately need only: login → connect approved services → optio
 - Social credentials/passwords remain unsupported; connection remains OAuth/API only.
 - This registry is an operational control layer, not a legal guarantee; current jurisdiction-specific rules must be reviewed before enabling automation.
 - Latest code/test commits: `ca3cda6e18241900e20cd4ded0ea22939b2a307a`, `303f7e9a03c21a78ffa22c484978b559b9387636`, `1d0c17ffb9c616e5d7c69eb206e0d518d24c88b4`.
+
+
+## 2026-10-08 — External Distribution Boundary
+- Added provider-agnostic `gf_distributions` records with explicit states, provenance and unique idempotency keys.
+- External distribution is fail-closed: unknown/YELLOW/RED compliance blocks before adapter execution; GREEN still requires an OAuth/API connection reference.
+- Platform connections now store only `account_id` and a credential-manager reference; raw social passwords are not accepted as connection data.
+- Added guarded prepare/submit/measurement API endpoints.
+- Default external adapter is a non-network stub: it records `SUBMITTED` and never publishes to a real platform.
+- External measurements are stored with `source=external`, remain separate from `test_fixture`, and move an experiment through `AWAITING_MEASUREMENT → MEASURED` before learning.
+- Added regression tests for YELLOW/RED blocking, GREEN+OAuth path, idempotency, password-free connection metadata, and measurement state transitions.
+- Latest code/test commits: `6d856bde261ef5299065bc8486315816a607e938`, `9c517c0c41b24ec401f224bcdee5b51fd5a1afeb`, `2a747722400a58354ccbd5cdfb7607f0b96192e6`, `5bec4ac576ba3feb63d488710a26c337328e90ee`, `b1866d7c778f0824a44fb94696c2a0243fc6c5db`, `193ee23f05a326485873a78dc6071c2d6da0986b`.
+- CI result for these new push commits has not been observed through the available GitHub workflow-run endpoint yet; therefore this block is saved but not claimed as CI-verified.
