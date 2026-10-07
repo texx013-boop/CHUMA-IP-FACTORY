@@ -45,8 +45,15 @@ class Handler(BaseHTTPRequestHandler):
                 if len(data.get("username",""))<3 or len(data.get("password",""))<8: return self.json(400,{"error":"invalid_credentials","message":"Логин минимум 3 символа, пароль минимум 8."})
                 o=self.service.create_owner(data["username"],data["password"]); return self.json(201,{"token":self.service.session(o)})
             if p=="/factory2/api/login":
-                o=self.service.verify(data.get("username",""),data.get("password",""))
-                if not o: return self.json(401,{"error":"invalid_credentials","message":"Неверный логин или пароль."})
+                username=str(data.get("username","")).strip()
+                guard_key="login:"+username.lower()
+                if not self.service.auth_guard_check(guard_key):
+                    return self.json(429,{"error":"login_temporarily_locked","message":"Слишком много неудачных попыток. Попробуйте позже."})
+                o=self.service.verify(username,data.get("password",""))
+                if not o:
+                    self.service.auth_guard_failure(guard_key)
+                    return self.json(401,{"error":"invalid_credentials","message":"Неверный логин или пароль."})
+                self.service.auth_guard_success(guard_key)
                 return self.json(200,{"token":self.service.session(o)})
             o=self.owner()
             if not o: return self.json(401,{"error":"unauthorized"})
