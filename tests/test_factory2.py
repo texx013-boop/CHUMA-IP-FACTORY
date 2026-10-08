@@ -428,7 +428,7 @@ def test_factory2_vk_image_sequence_uses_verified_artifact_and_attachment():
         def fake_request(method, params, token):
             calls.append((method,dict(params),token))
             if method=="photos.getWallUploadServer":
-                return {"upload_url":"https://upload.example/vk","user_id":7}
+                return {"upload_url":"https://upload.vk.com/vk","user_id":7}
             if method=="photos.saveWallPhoto":
                 return [{"id":55,"owner_id":-42}]
             if method=="wall.post":

@@ -244,3 +244,10 @@ Checkpoint after the autonomous hardening pass from `f0952d69e515e36dd80dcdeac71
 - VK upload URLs are restricted to HTTPS hosts under `vk.com`.
 - Added regression coverage for these boundaries.
 - CI PASS and live production/server smoke verification remain unclaimed until actually observed.
+
+
+## 2026-10-08 — Final hardening review
+
+- Rechecked the consolidated hardening against the existing Factory 2 regression suite.
+- Adjusted the mocked VK upload endpoint in the regression fixture to use an HTTPS `*.vk.com` host, matching the production upload-target allowlist.
+- No live provider call, CI PASS, or production-server PASS is claimed without an actual external execution result.
