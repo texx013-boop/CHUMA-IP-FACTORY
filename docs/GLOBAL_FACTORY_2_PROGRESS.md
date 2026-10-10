@@ -260,3 +260,16 @@ Checkpoint after the autonomous hardening pass from `f0952d69e515e36dd80dcdeac71
 - Capped the upload endpoint response body at 1 MiB before JSON parsing.
 - This is a source hardening change only; the local test suite, GitHub Actions, and live server have not been executed in this environment, so no PASS is claimed.
 - Code checkpoint: 0e4927cc5c1fa5031f31223f163061ca0ff9b4a2.
+
+
+## 2026-10-10 — VK multipart transport fix and CI checkpoint
+
+Checkpoint: `11bd7070c8491a66c256cd7465d800662c5d5d0b`
+
+- Fixed multipart framing in the VK upload transport: CRLF separators are now actual carriage-return/newline bytes rather than literal backslash sequences.
+- The VK API contract test now injects a deterministic upload response instead of contacting an external upload URL; this keeps tests offline and avoids accidental network calls.
+- Updated the contract assertion to check for the `wall.post` request independent of call order and to verify the runtime token is used consistently.
+- GLOBAL FACTORY 2 CI passed on this checkpoint: `128 passed in 8.08s`; Python compile step also passed.
+- CHUMA Server Handoff passed release validation on the same checkpoint.
+- CHUMA IP FACTORY CI was still running when this note was written; verify its final status before treating the overall repository checks as green.
+- No production deployment, live VK publication, or live server smoke test is claimed. Next step: verify the remaining workflow result, then continue toward a real deployment/health check without enabling external publishing.
