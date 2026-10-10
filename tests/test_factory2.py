@@ -359,9 +359,15 @@ def test_factory2_vk_official_adapter_uses_safe_secret_reference_and_real_api_co
         calls=[]
         def fake_request(method, params, token):
             calls.append((method, params, token))
+            if method=="photos.getWallUploadServer":
+                return {"upload_url":"https://upload.vk.com/upload","user_id":7}
+            if method=="photos.saveWallPhoto":
+                return [{"id":456,"owner_id":-42}]
             if method=="wall.post":
                 return {"post_id":123}
-            return {"items":[{"views":{"count":100},"likes":{"count":7},"comments":{"count":2},"reposts":{"count":1}}]}
+            if method=="wall.getById":
+                return {"items":[{"views":{"count":100},"likes":{"count":7},"comments":{"count":2},"reposts":{"count":1}}]}
+            raise AssertionError("unexpected VK method: "+method)
         adapter.request=fake_request
         image=Path(td)/"verified.png"
         raw=b"test-image"
@@ -630,7 +636,7 @@ def test_factory2_vk_upload_disables_redirects(monkeypatch, tmp_path):
 
     monkeypatch.setattr(urllib.request, "build_opener", fake_build_opener)
     result = adapter.upload_multipart("https://upload.vk.com/upload", image, "image/png")
-    redirect_handlers = [h for h in captured["handlers"] if isinstance(h, urllib.request.HTTPRedirectHandler)]
+    redirect_handlers = [h for h in captured["handlers"] if isinstance(h, type) and issubclass(h, urllib.request.HTTPRedirectHandler)]
     assert any(issubclass(h, urllib.request.HTTPRedirectHandler) for h in redirect_handlers)
     handler_class = next(h for h in redirect_handlers if issubclass(h, urllib.request.HTTPRedirectHandler))
     assert handler_class().redirect_request(None, None, 302, "Found", {}, "https://attacker.example/upload") is None
