@@ -273,3 +273,11 @@ Checkpoint: `11bd7070c8491a66c256cd7465d800662c5d5d0b`
 - CHUMA Server Handoff passed release validation on the same checkpoint.
 - CHUMA IP FACTORY CI was still running when this note was written; verify its final status before treating the overall repository checks as green.
 - No production deployment, live VK publication, or live server smoke test is claimed. Next step: verify the remaining workflow result, then continue toward a real deployment/health check without enabling external publishing.
+
+
+## 2026-10-10 — Remote reachability check
+
+- Rechecked the configured target `135.106.172.43` from the user's online Windows Desktop Commander device.
+- TCP/22 is reachable; TCP/80, 443, 8000, and 8080 are not reachable. HTTP `/health` and `/ready` did not respond on port 80.
+- Non-interactive SSH did not authenticate from the currently configured Windows session, so no remote commands or deployment changes were made.
+- Next deployment step is to establish the intended SSH identity/session safely, then inspect service status and deploy only after access is verified. Do not infer that the application is running from SSH port reachability.
