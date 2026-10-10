@@ -582,3 +582,57 @@ def test_factory2_spend_rejects_non_finite_amount():
             try: f.spend(owner,value); assert False
             except ValueError as exc: assert str(exc)=="invalid_amount"
         f.close()
+
+
+def test_factory2_vk_upload_disables_redirects(monkeypatch, tmp_path):
+    import urllib.request
+    adapter = __import__("chuma_ip_factory.global_factory_2", fromlist=["VKOfficialAdapter"]).VKOfficialAdapter()
+    image = tmp_path / "image.png"
+    image.write_bytes(b"test-image")
+    captured = {}
+
+    class Response:
+        def __enter__(self): return self
+        def __exit__(self, *args): return False
+        def read(self, limit):
+            return b'{"server":1,"photo":"[]","hash":"ok"}'
+
+    class Opener:
+        def open(self, req, timeout):
+            return Response()
+
+    def fake_build_opener(*handlers):
+        captured["handlers"] = handlers
+        return Opener()
+
+    monkeypatch.setattr(urllib.request, "build_opener", fake_build_opener)
+    result = adapter.upload_multipart("https://upload.vk.com/upload", image, "image/png")
+    redirect_handlers = [h for h in captured["handlers"] if isinstance(h, urllib.request.HTTPRedirectHandler)]
+    assert redirect_handlers
+    assert redirect_handlers[0].redirect_request(None, None, 302, "Found", {}, "https://attacker.example/upload") is None
+    assert result["hash"] == "ok"
+
+
+def test_factory2_vk_upload_rejects_oversized_response(monkeypatch, tmp_path):
+    import urllib.request
+    adapter = __import__("chuma_ip_factory.global_factory_2", fromlist=["VKOfficialAdapter"]).VKOfficialAdapter()
+    image = tmp_path / "image.png"
+    image.write_bytes(b"test-image")
+
+    class Response:
+        def __enter__(self): return self
+        def __exit__(self, *args): return False
+        def read(self, limit):
+            assert limit == 1024 * 1024 + 1
+            return b"x" * limit
+
+    class Opener:
+        def open(self, req, timeout):
+            return Response()
+
+    monkeypatch.setattr(urllib.request, "build_opener", lambda *handlers: Opener())
+    try:
+        adapter.upload_multipart("https://upload.vk.com/upload", image, "image/png")
+        assert False, "oversized provider response must fail closed"
+    except ExternalProviderError as exc:
+        assert str(exc) == "provider_upload_response_too_large"
