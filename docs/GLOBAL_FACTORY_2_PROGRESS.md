@@ -251,3 +251,12 @@ Checkpoint after the autonomous hardening pass from `f0952d69e515e36dd80dcdeac71
 - Rechecked the consolidated hardening against the existing Factory 2 regression suite.
 - Adjusted the mocked VK upload endpoint in the regression fixture to use an HTTPS `*.vk.com` host, matching the production upload-target allowlist.
 - No live provider call, CI PASS, or production-server PASS is claimed without an actual external execution result.
+
+
+
+## 2026-10-10 — VK upload transport hardening
+
+- Disabled automatic HTTP redirects for the VK image-upload request so an upload URL that redirects outside the validated VK host cannot silently redirect the artifact bytes to another host.
+- Capped the upload endpoint response body at 1 MiB before JSON parsing.
+- This is a source hardening change only; the local test suite, GitHub Actions, and live server have not been executed in this environment, so no PASS is claimed.
+- Code checkpoint: 0e4927cc5c1fa5031f31223f163061ca0ff9b4a2.
