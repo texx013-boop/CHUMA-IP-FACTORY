@@ -608,8 +608,9 @@ def test_factory2_vk_upload_disables_redirects(monkeypatch, tmp_path):
     monkeypatch.setattr(urllib.request, "build_opener", fake_build_opener)
     result = adapter.upload_multipart("https://upload.vk.com/upload", image, "image/png")
     redirect_handlers = [h for h in captured["handlers"] if isinstance(h, urllib.request.HTTPRedirectHandler)]
-    assert redirect_handlers
-    assert redirect_handlers[0].redirect_request(None, None, 302, "Found", {}, "https://attacker.example/upload") is None
+    assert any(issubclass(h, urllib.request.HTTPRedirectHandler) for h in redirect_handlers)
+    handler_class = next(h for h in redirect_handlers if issubclass(h, urllib.request.HTTPRedirectHandler))
+    assert handler_class().redirect_request(None, None, 302, "Found", {}, "https://attacker.example/upload") is None
     assert result["hash"] == "ok"
 
 
