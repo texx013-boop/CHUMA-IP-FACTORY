@@ -15,15 +15,15 @@ def test_cloud_runtime_contract():
     import pathlib
     root=pathlib.Path(__file__).parents[1]
     assert (root/'Dockerfile').exists()
-    assert '0.0.0.0' in (root/'run.py').read_text()
-    assert 'DATABASE_URL' in (root/'run.py').read_text()
-    assert 'CHUMA_ADMIN_TOKEN' in (root/'chuma_ip_factory'/'api.py').read_text()
+    assert '0.0.0.0' in (root/'run.py').read_text(encoding='utf-8')
+    assert 'DATABASE_URL' in (root/'run.py').read_text(encoding='utf-8')
+    assert 'CHUMA_ADMIN_TOKEN' in (root/'chuma_ip_factory'/'api.py').read_text(encoding='utf-8')
 
 
 def test_cloud_environment_contract_details():
     import pathlib
     root=pathlib.Path(__file__).parents[1]
-    run_src=(root/'run.py').read_text()
+    run_src=(root/'run.py').read_text(encoding='utf-8')
     assert "os.getenv('PORT'" in run_src
     assert "os.getenv('CHUMA_DATA_DIR'" in run_src
     assert "os.getenv('CHUMA_MEDIA_DIR'" in run_src
