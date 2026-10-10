@@ -294,5 +294,6 @@ Checkpoint branch: `fix/windows-test-portability-20261010`, based on `69f8a3e41e
 - Restored the Hugging Face test environment using temporary dependency files only; no global Python packages were changed.
 - Final local verification: **128 passed in 31.66s**; `compileall` passed; `git diff --check` passed.
 - These changes are test portability fixes only; production runtime code was not changed in this block.
-- This is a local Windows verification, not a GitHub Actions result and not a live server/deployment smoke test. The Railway deployment status on the prior checkpoint reported failure; inspect that deployment separately before claiming production readiness.
-- Next gate: confirm branch CI, then resume server access/service inspection and production smoke verification without enabling external publication by default.
+- GitHub Actions on this PR subsequently completed successfully: GLOBAL FACTORY 2 CI run #93 and CHUMA IP FACTORY CI run #726. The full 128-test suite, compile, deployment-manifest validation, Docker build, infrastructure syntax checks, remote-control-agent syntax, release-handoff integration test, and Docker build security check all passed.
+- No live server/deployment smoke test is claimed. The Railway deployment status on the prior checkpoint reported failure; inspect that separately before claiming production readiness.
+- Next gate: diagnose the Railway/Selectel runtime state and verify service health without enabling external publishing by default.
