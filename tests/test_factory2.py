@@ -386,8 +386,12 @@ def test_factory2_vk_provider_fails_closed_without_runtime_secret():
         f=Factory2(Path(td)/"factory.db", Path(td)/"media")
         adapter=f.distribution_adapter("vk")
         ref="oauth://vk/missing"
+        image=Path(td)/"verified.png"
+        raw=b"test-image"
+        image.write_bytes(raw)
+        artifact={"storage_path":str(image),"content_hash":hashlib.sha256(raw).hexdigest(),"status":"READY","mime_type":"image/png","artifact_id":"ART-test"}
         try:
-            adapter.publish({"account_id":"-42","credential_ref":ref,"text":"hello"})
+            adapter.publish({"account_id":"-42","credential_ref":ref,"text":"hello","artifact":artifact})
             assert False
         except ExternalProviderError as exc:
             assert str(exc)=="credential_resolution_unavailable"
