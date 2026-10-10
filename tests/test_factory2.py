@@ -373,6 +373,7 @@ def test_factory2_vk_official_adapter_uses_safe_secret_reference_and_real_api_co
         raw=b"test-image"
         image.write_bytes(raw)
         artifact={"storage_path":str(image),"content_hash":hashlib.sha256(raw).hexdigest(),"status":"READY","mime_type":"image/png","artifact_id":"ART-test"}
+        adapter.upload_multipart=lambda upload_url,file_path,mime_type: {"server":1,"photo":"[]","hash":"test-upload-hash"}
         published=adapter.publish({"account_id":"-42","credential_ref":ref,"text":"hello","artifact":artifact})
         assert published["state"]=="PUBLISHED"
         assert published["external_id"]=="-42_123"
