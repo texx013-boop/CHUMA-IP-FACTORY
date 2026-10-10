@@ -281,3 +281,18 @@ Checkpoint: `11bd7070c8491a66c256cd7465d800662c5d5d0b`
 - TCP/22 is reachable; TCP/80, 443, 8000, and 8080 are not reachable. HTTP `/health` and `/ready` did not respond on port 80.
 - Non-interactive SSH did not authenticate from the currently configured Windows session, so no remote commands or deployment changes were made.
 - Next deployment step is to establish the intended SSH identity/session safely, then inspect service status and deploy only after access is verified. Do not infer that the application is running from SSH port reachability.
+
+
+## 2026-10-10 — Windows test portability and full-suite verification
+
+Checkpoint branch: `fix/windows-test-portability-20261010`, based on `69f8a3e41e3f2928609dd4b9576045f95366e0cf`.
+
+- Retrieved the current `main` source into an isolated temporary worktree; no checkout or overwrite was performed in the user's original project folder.
+- Python compilation passed for `chuma_ip_factory` and `run.py`.
+- The complete test suite collected 128 tests. Initial Windows-only failures were traced to open SQLite connections during temporary-directory cleanup and implicit platform-default text decoding.
+- Updated test cleanup to close the store before removing its SQLite directory, and made runtime-source contract tests read UTF-8 explicitly.
+- Restored the Hugging Face test environment using temporary dependency files only; no global Python packages were changed.
+- Final local verification: **128 passed in 31.66s**; `compileall` passed; `git diff --check` passed.
+- These changes are test portability fixes only; production runtime code was not changed in this block.
+- This is a local Windows verification, not a GitHub Actions result and not a live server/deployment smoke test. The Railway deployment status on the prior checkpoint reported failure; inspect that deployment separately before claiming production readiness.
+- Next gate: confirm branch CI, then resume server access/service inspection and production smoke verification without enabling external publication by default.
