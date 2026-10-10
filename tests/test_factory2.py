@@ -363,7 +363,8 @@ def test_factory2_vk_official_adapter_uses_safe_secret_reference_and_real_api_co
                 return {"post_id":123}
             return {"items":[{"views":{"count":100},"likes":{"count":7},"comments":{"count":2},"reposts":{"count":1}}]}
         adapter.request=fake_request
-        published=adapter.publish({"account_id":"-42","credential_ref":ref,"text":"hello"})
+        published=image=Path(td)/"missing.png"; raw=b"test-image"; image.write_bytes(raw); artifact={"storage_path":str(image),"content_hash":hashlib.sha256(raw).hexdigest(),"status":"READY","mime_type":"image/png","artifact_id":"ART-test"}
+            adapter.publish({"account_id":"-42","credential_ref":ref,"text":"hello","artifact":artifact})
         assert published["state"]=="PUBLISHED"
         assert published["external_id"]=="-42_123"
         measured=adapter.fetch_measurement({"external_id":"-42_123","credential_ref":ref})
@@ -398,6 +399,8 @@ def test_factory2_distribution_requires_verified_artifact_before_provider_publis
         eid=f.create_experiment(owner,cid,"artifact gate")
         f.set_compliance_rule(owner,"vk","publish","RU","GREEN",True,source="test",note="provider contract")
         f.connect_platform(owner,"vk",account_id="-42",credential_ref="oauth://vk/test")
+        f.chuma.store.db.execute("INSERT INTO content VALUES(?,?,?,?,?,?,?,?,?)", ("content-x", owner, cid, json.dumps({"text":"hello"}), "READY", json.dumps({}), json.dumps({"test":True}), int(time.time()), int(time.time())))
+        f.chuma.store.commit()
         d=f.prepare_distribution(owner,"content-x","vk",experiment_id=eid)
         try:
             f.submit_distribution(owner,d["id"])
@@ -449,6 +452,7 @@ def test_factory2_vk_image_sequence_uses_verified_artifact_and_attachment():
             raise AssertionError(method)
         adapter.request=fake_request
         adapter.upload_multipart=lambda url,path,mime: {"server":1,"photo":"[]","hash":"upload-hash"}
+        f.distribution_adapter=lambda platform: adapter
 
         published=f.submit_distribution(owner,d["id"])
         assert published["state"]=="PUBLISHED"
