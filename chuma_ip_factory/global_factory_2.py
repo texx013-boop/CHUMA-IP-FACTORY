@@ -633,11 +633,11 @@ class VKOfficialAdapter(ExternalDistributionAdapter):
         filename=Path(file_path).name
         raw=Path(file_path).read_bytes()
         head=(
-            f"--{boundary}\\r\\n"
-            f'Content-Disposition: form-data; name="photo"; filename="{filename}"\\r\\n'
-            f"Content-Type: {mime_type}\\r\\n\\r\\n"
+            f"--{boundary}\r\n"
+            f'Content-Disposition: form-data; name="photo"; filename="{filename}"\r\n'
+            f"Content-Type: {mime_type}\r\n\r\n"
         ).encode("utf-8")
-        tail=f"\\r\\n--{boundary}--\\r\\n".encode("utf-8")
+        tail=f"\r\n--{boundary}--\r\n".encode("utf-8")
         body=head+raw+tail
         req=__import__("urllib.request",fromlist=["Request"]).Request(
             str(upload_url),data=body,method="POST",
