@@ -644,8 +644,18 @@ class VKOfficialAdapter(ExternalDistributionAdapter):
             headers={"Content-Type":f"multipart/form-data; boundary={boundary}",
                      "Content-Length":str(len(body))})
         try:
-            with __import__("urllib.request",fromlist=["urlopen"]).urlopen(req,timeout=30) as response:
-                result=json.loads(response.read().decode("utf-8"))
+            request_module=__import__("urllib.request",fromlist=["Request","build_opener","HTTPRedirectHandler"])
+            class _NoRedirect(request_module.HTTPRedirectHandler):
+                def redirect_request(self, req, fp, code, msg, headers, newurl):
+                    return None
+            opener=request_module.build_opener(_NoRedirect)
+            with opener.open(req,timeout=30) as response:
+                raw_response=response.read(1024*1024+1)
+            if len(raw_response)>1024*1024:
+                raise ExternalProviderError("provider_upload_response_too_large")
+            result=json.loads(raw_response.decode("utf-8"))
+        except ExternalProviderError:
+            raise
         except Exception as exc:
             raise ExternalProviderError("provider_upload_error") from exc
         if not isinstance(result,dict) or not result.get("server") or "photo" not in result or not result.get("hash"):
