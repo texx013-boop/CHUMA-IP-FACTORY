@@ -382,8 +382,8 @@ def test_factory2_vk_official_adapter_uses_safe_secret_reference_and_real_api_co
         assert measured["likes"]==7.0
         assert measured["comments"]==2.0
         assert measured["shares"]==1.0
-        assert calls[0][0]=="wall.post"
-        assert calls[0][2]=="test-token"
+        assert any(call[0]=="wall.post" for call in calls)
+        assert all(call[2]=="test-token" for call in calls)
         del os.environ[env_name]
         f.close()
 
