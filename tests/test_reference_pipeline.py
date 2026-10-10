@@ -48,4 +48,5 @@ def test_reference_asset_is_passed_to_generation_and_not_used_as_production_asse
     production = __import__("json").loads(row["production_json"])
     assert attached["asset_id"] not in production["asset_ids"]
 
+    c.store.close()
     d.cleanup()
