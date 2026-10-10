@@ -6,6 +6,16 @@ import time
 from pathlib import Path
 from chuma_ip_factory.global_factory_2 import Factory2, VERSION, ExternalProviderError
 
+
+def _seed_distribution_content(factory, owner, character_id, content_id, directory):
+    factory.chuma.store.db.execute("INSERT INTO content VALUES(?,?,?,?,?,?,?,?,?)", (content_id, owner, character_id, json.dumps({"text":"hello"}), "READY", json.dumps({}), json.dumps({"test": True}), int(time.time()), int(time.time())))
+    image = Path(directory) / (content_id + ".png")
+    raw = b"verified test image"
+    image.write_bytes(raw)
+    digest = hashlib.sha256(raw).hexdigest()
+    factory.chuma.store.db.execute("INSERT INTO artifacts VALUES(?,?,?,?,?,?,?,?,?,?,?,?)", ("ART-" + content_id, owner, character_id, content_id, "ASSET-" + content_id, "4:5", "image/png", str(image), digest, "test-provider", "READY", int(time.time())))
+    factory.chuma.store.commit()
+
 def test_factory2_owner_dashboard_and_start():
     with tempfile.TemporaryDirectory() as td:
         f=Factory2(Path(td)/"factory.db", Path(td)/"media")
@@ -209,6 +219,7 @@ def test_factory2_distribution_green_oauth_path_is_idempotent_and_password_free(
         cid=f.bootstrap_character(owner,"Test IP")
         f.set_compliance_rule(owner,"green-platform","publish","RU","GREEN",True,source="test",note="allowed")
         f.connect_platform(owner,"green-platform",account_id="acct-1",credential_ref="secret-manager://green/account-1")
+        _seed_distribution_content(f, owner, cid, "content-g", td)
         d=f.prepare_distribution(owner,"content-g","green-platform")
         assert d["state"]=="QUEUED"
         d2=f.prepare_distribution(owner,"content-g","green-platform")
@@ -244,6 +255,7 @@ def test_factory2_distribution_moves_experiment_to_measurement_then_learning():
         eid=f.create_experiment(owner,cid,"external hook")
         f.set_compliance_rule(owner,"green-platform","publish","RU","GREEN",True,source="test",note="allowed")
         f.connect_platform(owner,"green-platform",account_id="acct-1",credential_ref="secret-manager://green/account-1")
+        _seed_distribution_content(f, owner, cid, "content-state", td)
         d=f.prepare_distribution(owner,"content-state","green-platform",experiment_id=eid)
         submitted=f.submit_distribution(owner,d["id"])
         assert submitted["state"]=="SUBMITTED"
