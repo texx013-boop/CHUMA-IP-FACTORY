@@ -363,8 +363,11 @@ def test_factory2_vk_official_adapter_uses_safe_secret_reference_and_real_api_co
                 return {"post_id":123}
             return {"items":[{"views":{"count":100},"likes":{"count":7},"comments":{"count":2},"reposts":{"count":1}}]}
         adapter.request=fake_request
-        published=image=Path(td)/"missing.png"; raw=b"test-image"; image.write_bytes(raw); artifact={"storage_path":str(image),"content_hash":hashlib.sha256(raw).hexdigest(),"status":"READY","mime_type":"image/png","artifact_id":"ART-test"}
-            adapter.publish({"account_id":"-42","credential_ref":ref,"text":"hello","artifact":artifact})
+        image=Path(td)/"verified.png"
+        raw=b"test-image"
+        image.write_bytes(raw)
+        artifact={"storage_path":str(image),"content_hash":hashlib.sha256(raw).hexdigest(),"status":"READY","mime_type":"image/png","artifact_id":"ART-test"}
+        published=adapter.publish({"account_id":"-42","credential_ref":ref,"text":"hello","artifact":artifact})
         assert published["state"]=="PUBLISHED"
         assert published["external_id"]=="-42_123"
         measured=adapter.fetch_measurement({"external_id":"-42_123","credential_ref":ref})
@@ -406,7 +409,7 @@ def test_factory2_distribution_requires_verified_artifact_before_provider_publis
             f.submit_distribution(owner,d["id"])
             assert False
         except ExternalProviderError as exc:
-            assert str(exc)=="content_not_found"
+            assert str(exc)=="content_artifact_missing"
         f.close()
 
 
