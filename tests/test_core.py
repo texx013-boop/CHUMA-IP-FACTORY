@@ -2,7 +2,13 @@ import tempfile, pathlib
 from chuma_ip_factory import CHUMA
 
 def app():
-    d=tempfile.TemporaryDirectory(); return d,CHUMA(pathlib.Path(d.name)/'db.sqlite',pathlib.Path(d.name)/'media')
+    d=tempfile.TemporaryDirectory(); c=CHUMA(pathlib.Path(d.name)/'db.sqlite',pathlib.Path(d.name)/'media')
+    cleanup=d.cleanup
+    def close_and_cleanup():
+        c.store.close()
+        cleanup()
+    d.cleanup=close_and_cleanup
+    return d,c
 
 def test_owner_and_character_isolation():
     d,c=app(); o1=c.owner(); o2=c.owner(); cid=c.create_character(o1,'A')

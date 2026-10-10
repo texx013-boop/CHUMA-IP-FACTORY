@@ -16,6 +16,7 @@ def test_job_queue_is_idempotent_and_runs():
     assert "Кафе в Москве" in content["idea_json"]
     assert c.store.one("SELECT COUNT(*) n FROM signals WHERE owner_id=?",(o,))["n"] == 2
     assert c.store.one("SELECT COUNT(*) n FROM decisions WHERE owner_id=?",(o,))["n"] == 1
+    c.store.close()
     d.cleanup()
 
 def test_job_failure_retries_then_dead_letters():
@@ -33,4 +34,5 @@ def test_job_failure_retries_then_dead_letters():
     second=c.run_job(jid)
     assert second["status"]=="DEAD_LETTER" and second["attempts"]==2
     assert "queue_failure" in second["error"]
+    c.store.close()
     d.cleanup()
