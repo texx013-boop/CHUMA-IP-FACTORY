@@ -586,7 +586,7 @@ def test_factory2_spend_rejects_non_finite_amount():
 
 def test_factory2_vk_upload_disables_redirects(monkeypatch, tmp_path):
     import urllib.request
-    adapter = __import__("chuma_ip_factory.global_factory_2", fromlist=["VKOfficialAdapter"]).VKOfficialAdapter()
+    adapter = __import__("chuma_ip_factory.global_factory_2", fromlist=["VKOfficialAdapter"]).VKOfficialAdapter("vk")
     image = tmp_path / "image.png"
     image.write_bytes(b"test-image")
     captured = {}
@@ -615,7 +615,7 @@ def test_factory2_vk_upload_disables_redirects(monkeypatch, tmp_path):
 
 def test_factory2_vk_upload_rejects_oversized_response(monkeypatch, tmp_path):
     import urllib.request
-    adapter = __import__("chuma_ip_factory.global_factory_2", fromlist=["VKOfficialAdapter"]).VKOfficialAdapter()
+    adapter = __import__("chuma_ip_factory.global_factory_2", fromlist=["VKOfficialAdapter"]).VKOfficialAdapter("vk")
     image = tmp_path / "image.png"
     image.write_bytes(b"test-image")
 
